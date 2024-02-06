@@ -155,7 +155,7 @@ cap_co2 = 0.0; // kt C02
     annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
     fom = 75; // MEur/year
     vom = 0.00135; // MEur/GWh
-    capacity_factor_off_wind = import "..\..\data\wind\load_factor_woff_GL.csv"; // Dimensionless
+    capacity_factor_off_wind = import "..\..\data\load_factor_woff_GL.csv"; // Dimensionless
     max_capacity = 1000.0; // GW
     #VARIABLES
     internal: capacity;
