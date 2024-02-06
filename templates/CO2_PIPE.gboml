@@ -1,0 +1,148 @@
+#TIMEHORIZON
+// time horizon definition
+T = 8760;
+
+#NODE PIPE_CO2_ON_SHORE_SMALL // 0.01-0.03 kt/h
+    // DATA from ENS.DK
+	#PARAMETERS
+        length = 3000;                           // length of the pipe in km
+        capex = 15 * length;                // M€/kt/h
+        fom = 20 * 1/(10**3) * length;                // M€/kt/h
+        vom = 0;                                // M€/kt
+        lifetime = 50.0;                        // years
+        electricity_required_for_CO2 = 0.06;   //MW/kt/h
+        efficiency_pipe = 1.0;
+        yearly_capex = capex * global.wacc / (1 - (1 + global.wacc)**(-lifetime));
+    #VARIABLES
+        external: flow_in[T]; // kt/h
+        external: flow_out[T]; // kt/h
+        external: e_consumed[T]; // MWH(e)
+        internal: capacity; // kt/h
+    #CONSTRAINTS
+        flow_out[t] == efficiency_pipe * flow_in[t];
+        capacity >= 0;
+        flow_in[t] >= 0;
+        flow_in[t] <= capacity;
+        e_consumed[t] == electricity_required_for_CO2 * flow_in[t];
+
+    #OBJECTIVES
+        min pipe_cost_fix: (yearly_capex + fom) * capacity * global.number_years_horizon;
+        min pipe_cost_var: vom * flow_in[t];
+
+
+#NODE PIPE_CO2_ON_SHORE_BIG // 0.030-0.12 kt/h
+     // DATA from ENS.DK
+    #PARAMETERS
+        length = 3000;                           // length of the pipe in km
+        capex = 8 * length;                // M€/kt/h
+        fom = 20 * 1/(10**3) * length;                // M€/kt/h
+        vom = 0;                                // M€/kt
+        lifetime = 50.0;                        // years
+        electricity_required_for_CO2 = 0.04;   //MW/kt/h
+        efficiency_pipe = 1.0;
+        yearly_capex = capex * global.wacc / (1 - (1 + global.wacc)**(-lifetime));
+    #VARIABLES
+        external: flow_in[T]; // kt/h
+        external: flow_out[T]; // kt/h
+        external: e_consumed[T]; // MWH(e)
+        internal: capacity; // kt/h
+    #CONSTRAINTS
+        flow_out[t] == efficiency_pipe * flow_in[t];
+        capacity >= 0;
+        flow_in[t] >= 0;
+        flow_in[t] <= capacity;
+        e_consumed[t] == electricity_required_for_CO2 * flow_in[t];
+        
+    #OBJECTIVES
+        min pipe_cost_fix: (yearly_capex + fom) * capacity * global.number_years_horizon;
+        min pipe_cost_var: vom * flow_in[t];
+
+#NODE PIPE_CO2_ON_SHORE_VERY_BIG // 0.12-0.5 kt/h
+     // DATA from ENS.DK
+    #PARAMETERS
+        length = 3000;                           // length of the pipe in km
+        capex = 2.3 * length;                // M€/kt/h
+        fom = 20 * 1/(10**3) * length;                // M€/kt/h
+        vom = 0;                                // M€/kt
+        lifetime = 50.0;                        // years
+        electricity_required_for_CO2 = 0.02;   //MW/kt/h
+        efficiency_pipe = 1.0;
+        yearly_capex = capex * global.wacc / (1 - (1 + global.wacc)**(-lifetime));
+    #VARIABLES
+        external: flow_in[T]; // kt/h
+        external: flow_out[T]; // kt/h
+        external: e_consumed[T]; // MWH(e)
+        internal: capacity; // kt/h
+    #CONSTRAINTS
+        flow_out[t] == efficiency_pipe * flow_in[t];
+        capacity >= 0;
+        flow_in[t] >= 0;
+        flow_in[t] <= capacity;
+        e_consumed[t] == electricity_required_for_CO2 * flow_in[t];
+        
+    #OBJECTIVES
+        min pipe_cost_fix: (yearly_capex + fom) * capacity * global.number_years_horizon;
+        min pipe_cost_var: vom * flow_in[t];
+
+#NODE PIPE_CO2_OFF_SHORE // 0.12-0.5 kt/h
+     // DATA from ENS.DK
+    #PARAMETERS
+        length = 3000;                           // length of the pipe in km
+        capex = 4 * length;                // M€/kt/h
+        fom = 20 * 1/(10**3) * length;                // M€/kt/h
+        vom = 0;                                // M€/kt
+        lifetime = 50.0;                        // years
+        electricity_required_for_CO2 = 0.02;   //MW/kt/h
+        efficiency_pipe = 1.0;
+        yearly_capex = capex * global.wacc / (1 - (1 + global.wacc)**(-lifetime));
+    #VARIABLES
+        external: flow_in[T]; // kt/h
+        external: flow_out[T]; // kt/h
+        external: e_consumed[T]; // MWH(e)
+        internal: capacity; // kt/h
+    #CONSTRAINTS
+        flow_out[t] == efficiency_pipe * flow_in[t];
+        capacity >= 0;
+        flow_in[t] >= 0;
+        flow_in[t] <= capacity;
+        e_consumed[t] == electricity_required_for_CO2 * flow_in[t];
+        
+    #OBJECTIVES
+        min pipe_cost_fix: (yearly_capex + fom) * capacity * global.number_years_horizon;
+        min pipe_cost_var: vom * flow_in[t];
+
+#NODE CARRIER_CO2 // Data ENS.DK 10 kt CO2 capacity
+    #PARAMETERS
+    number_carriers = 7;
+    full_capex = 5; // M€/kt
+    lifetime = 40.0;
+    annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+    fom = 0.0; // 0.25; // MEur/year
+    vom = 0.0;
+    schedule = import "../data/carrier_schedule.csv";
+
+    loading_time = 24;
+    travel_time = 116;
+    conversion_factor = 1.0;
+    energy_consumption = 0.0150; // GWh/day
+    #VARIABLES
+    internal: capacity; // kt/h
+    external: flow_in[T];
+    external: flow_out[T];
+    external: methane_in[T];
+    #CONSTRAINTS
+    flow_in[t] <= schedule[t] * capacity;
+    flow_out[t+travel_time] == conversion_factor * flow_in[t];
+    flow_out[t] == 0 where t < travel_time;
+
+    // Below: availability_at_RREH * GWH/day * days of travelling * Go there and back * reference capacity ens.dk * capacity * 1/hours of loading; 
+    methane_in[t] == schedule[t + loading_time + travel_time] * energy_consumption * (travel_time/24) * 2 * (1/10) * capacity * (1/loading_time); // Gwh / h 
+    methane_in[t] >= 0;
+    // methane_in[t] == 0 where t < travel_time;
+
+    capacity >= 0;
+    flow_in[t] >= 0;
+    flow_out[t] >= 0;
+    #OBJECTIVES
+    min: global.number_years_horizon * (annualised_capex + fom) * capacity * loading_time * number_carriers;
+    min: vom * flow_in[t];
