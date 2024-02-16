@@ -33,105 +33,7 @@ cap_co2 = 0.0; // kt C02
     #OBJECTIVES
     min: e_ens[t] * global.e_ens_cost; // M€
 
-#NODE PCCC
-    // Berger et al. 2019 have been taken as defaults for cost and efficiency parameters
-    #PARAMETERS
-    unit_kt_h = 0;
-    energy_carbon_dioxide = 0;
-    pre_installed_capacity = 0;
-    max_capacity = 5;                       // kt - maximum capacity of carbon capture 
-    // data from Berger et al. 2019
-    capex_existing = 3150.0;                         // M€/kt/h
-    fom_existing = 0.0;
-    vom_existing = 0.0;
-    lifetime_existing = 20;
-    // data from Berger et al. 2019
-    capex = 3150.0;                         // M€/kt/h
-    fom = 0.0;
-    vom = 0.0;
-    lifetime = 20;
-    electricity_required_for_CO2 = 0.4125;  // GWh/kt
-    // Other
-    nb_year = T/8760;
-    wacc = 0.07;
-    yearly_capex_existing = capex_existing * wacc / (1 - (1 + wacc)**(-lifetime_existing));
-    yearly_capex = capex * wacc / (1 - (1 + wacc)**(-lifetime));
-    yearly_existing_cost = (yearly_capex_existing + fom_existing) * nb_year * pre_installed_capacity; 
-
-    ramp_rate_up = 1.0;
-    ramp_rate_down = 1.0;
-
-    #VARIABLES
-    external: e_consumed[T];
-    internal: new_capacity;
-    external: co2_released[T];
-    external: co2_captured[T];
-
-    #CONSTRAINTS
-    e_consumed[t] >= 0;
-    new_capacity >= 0;
-    new_capacity <= max_capacity - pre_installed_capacity;
-    co2_captured[t] >= 0;
-    co2_released[t] >= 0;
-    co2_captured[t] <= new_capacity;
-    e_consumed[t] == electricity_required_for_CO2 * co2_captured[t];
-
-    co2_captured[t] <= co2_captured[t-1] + ramp_rate_up * new_capacity;
-    co2_captured[t-1] <= co2_captured[t] + ramp_rate_down * new_capacity;
-
-    #OBJECTIVES
-    min fix_cost: (yearly_capex + fom) * nb_year * new_capacity;     // M€
-    min var_cost: vom * co2_captured[t];                             // M€
-    min co2_cost: global.co2_emission_cost * co2_released[t];        // M€
-
-// CO2 Infrastructure
-#NODE PROD_CO2
-    #PARAMETERS
-        co2_produced_value = 40000 / (365*24); // kt(co2); Approx prod per year by combustion of CO2 divided by number of hours in a year
-    #VARIABLES
-        external: co2_produced[T] ;                      // kt(co2)
-    #CONSTRAINTS
-      co2_produced[t] >= co2_produced_value;
-
-#NODE PIPE_CO2_GR = import PIPE_CO2_OFF_SHORE from "..\..\templates\CO2_PIPE.gboml" with 
-    length=3000;
-
-#NODE CARRIER_CO2_GR = import CARRIER_CO2 from "..\..\templates\CO2_PIPE.gboml";
-
-#NODE CARBON_DIOXIDE_STORAGE_BE = import CARBON_DIOXIDE_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
-
-#HYPEREDGE PIPE_CO2_CONNECTION
-    #CONSTRAINTS
-        pipe_and_boat: PCCC.co2_captured[t] + CARBON_DIOXIDE_STORAGE_BE.carbon_dioxide_out[t] == CARRIER_CO2_GR.flow_in[t] + PIPE_CO2_GR.flow_in[t] + CO2_EXPORT.exported[t] + CARBON_DIOXIDE_STORAGE_BE.carbon_dioxide_in[t]; // kt/h 
-	    only_pipe: PCCC.co2_captured[t] + CARBON_DIOXIDE_STORAGE_BE.carbon_dioxide_out[t] == PIPE_CO2_GR.flow_in[t] + CO2_EXPORT.exported[t] + CARBON_DIOXIDE_STORAGE_BE.carbon_dioxide_in[t];
-        only_carrier: PCCC.co2_captured[t] + CARBON_DIOXIDE_STORAGE_BE.carbon_dioxide_out[t] == CARRIER_CO2_GR.flow_in[t] + CO2_EXPORT.exported[t] + CARBON_DIOXIDE_STORAGE_BE.carbon_dioxide_in[t];
-
-
-#HYPEREDGE APPLY_PCCC_PROD_C02
-	#PARAMETERS
-		max_co2_captured_rate = 0.9;
-    #CONSTRAINTS
-    	PROD_CO2.co2_produced[t] == PCCC.co2_captured[t] + PCCC.co2_released[t];
-        PCCC.co2_captured[t] <= max_co2_captured_rate * PROD_CO2.co2_produced[t];
-
-
-#NODE CO2_EXPORT
-	// data from Berger et al. 2019
-	#PARAMETERS
-	export_cost = 2 * 1/(10**3); // k€/t
-	export_capacity = 3.5; // kt/h
-
-	#VARIABLES
-	external: exported[T]; // kt/h 
-
-	#CONSTRAINTS
-	exported[t] >= 0;
-	exported[t] <= export_capacity;
-
-	#OBJECTIVES
-	min export_cost: export_cost * exported[t]; // M€
-
-// Methane Balaance belgium gas
+// Methane Balance Belgium gas
 #HYPEREDGE DESTINATION_METHANE_BALANCE
 	#PARAMETERS
 	demand = import "..\..\data\demand_ng.csv"; // /!\ Gas Demand Constant // GWh (ch4)
@@ -139,12 +41,10 @@ cap_co2 = 0.0; // kt C02
 	#CONSTRAINTS
 	conversion_factor * LIQUEFIED_METHANE_REGASIFICATION.methane[t] == demand[t];
 
-
-// Methane Balance belgium Liquid
+// Methane Balance Belgium Liquid
 #HYPEREDGE DESTINATION_LIQUEFIED_METHANE_BALANCE
 	#CONSTRAINTS
 	LIQUEFIED_METHANE_CARRIERS_GR.liquefied_methane_out[t] + LIQUEFIED_METHANE_STORAGE_DESTINATION.liquefied_methane_out[t] == LIQUEFIED_METHANE_STORAGE_DESTINATION.liquefied_methane_in[t] + LIQUEFIED_METHANE_REGASIFICATION.liquefied_methane[t];
-
 
 // REMOTE HUB GROENLAND
 
@@ -226,15 +126,8 @@ DESALINATION_PLANTS_GR.water[t] + METHANATION_PLANTS_GR.water[t] + WATER_STORAGE
 
 #HYPEREDGE COASTAL_LIQUEFIED_METHANE_BALANCE_GR
     #CONSTRAINTS
-    pipe_and_boat: METHANE_LIQUEFACTION_PLANTS_GR.liquefied_methane[t] + LIQUEFIED_METHANE_STORAGE_HUB_GR.liquefied_methane_out[t] == LIQUEFIED_METHANE_STORAGE_HUB_GR.liquefied_methane_in[t] + LIQUEFIED_METHANE_CARRIERS_GR.liquefied_methane_in[t] + CARRIER_CO2_GR.methane_in[t]*15.3; // GWh;
-    only_pipe: METHANE_LIQUEFACTION_PLANTS_GR.liquefied_methane[t] + LIQUEFIED_METHANE_STORAGE_HUB_GR.liquefied_methane_out[t] == LIQUEFIED_METHANE_STORAGE_HUB_GR.liquefied_methane_in[t] + LIQUEFIED_METHANE_CARRIERS_GR.liquefied_methane_in[t]; // GWh;
-    only_carrier: METHANE_LIQUEFACTION_PLANTS_GR.liquefied_methane[t] + LIQUEFIED_METHANE_STORAGE_HUB_GR.liquefied_methane_out[t] == LIQUEFIED_METHANE_STORAGE_HUB_GR.liquefied_methane_in[t] + LIQUEFIED_METHANE_CARRIERS_GR.liquefied_methane_in[t] + CARRIER_CO2_GR.methane_in[t]*15.3; // GWh;
-
+        liquefied_methane_balance: METHANE_LIQUEFACTION_PLANTS_GR.liquefied_methane[t] + LIQUEFIED_METHANE_STORAGE_HUB_GR.liquefied_methane_out[t] == LIQUEFIED_METHANE_STORAGE_HUB_GR.liquefied_methane_in[t] + LIQUEFIED_METHANE_CARRIERS_GR.liquefied_methane_in[t]; // GWh;
 
 #HYPEREDGE COASTAL_CARBON_DIOXIDE_BALANCE_GR
     #CONSTRAINTS
-        pipe_and_boat: DIRECT_AIR_CAPTURE_PLANTS_GR.carbon_dioxide[t] + PIPE_CO2_GR.flow_out[t] + CARRIER_CO2_GR.flow_out[t] + CARBON_DIOXIDE_STORAGE_GR.carbon_dioxide_out[t] == CARBON_DIOXIDE_STORAGE_GR.carbon_dioxide_in[t] + METHANATION_PLANTS_GR.carbon_dioxide[t];
-        only_pipe: DIRECT_AIR_CAPTURE_PLANTS_GR.carbon_dioxide[t] + PIPE_CO2_GR.flow_out[t] + CARBON_DIOXIDE_STORAGE_GR.carbon_dioxide_out[t] == CARBON_DIOXIDE_STORAGE_GR.carbon_dioxide_in[t] + METHANATION_PLANTS_GR.carbon_dioxide[t];
-        only_carrier: DIRECT_AIR_CAPTURE_PLANTS_GR.carbon_dioxide[t] + CARRIER_CO2_GR.flow_out[t] + CARBON_DIOXIDE_STORAGE_GR.carbon_dioxide_out[t] == CARBON_DIOXIDE_STORAGE_GR.carbon_dioxide_in[t] + METHANATION_PLANTS_GR.carbon_dioxide[t];
-
-
+        only_carrier: DIRECT_AIR_CAPTURE_PLANTS_GR.carbon_dioxide[t] + CARBON_DIOXIDE_STORAGE_GR.carbon_dioxide_out[t] == CARBON_DIOXIDE_STORAGE_GR.carbon_dioxide_in[t] + METHANATION_PLANTS_GR.carbon_dioxide[t];
