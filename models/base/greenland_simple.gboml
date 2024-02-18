@@ -71,11 +71,11 @@ cap_co2 = 0.0; // kt C02
 
 #NODE ON_WIND_PLANTS_GR
     #PARAMETERS
-    full_capex = 1410; // in MEur/GW --> source = Denmark 2030
+    full_capex = 1110; // in MEur/GW --> source = Denmark 2030
     lifetime = 30.0;
     annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
-    fom = 27.2; // MEur/year --> source = Denmark 2030
-    vom = 0.00298; // MEur/GWh --> source = Denmark 2030
+    fom = 13.4; // MEur/year --> source = Denmark 2030
+    vom = 0.00144; // MEur/GWh --> source = Denmark 2030
     capacity_factor_wind = import "../../data/load_factor_won_GL.csv"; // Dimensionless
     max_capacity = 1000.0; // GW
     #VARIABLES
