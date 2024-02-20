@@ -200,28 +200,6 @@ cap_co2 = 0.0; // kt C02
     min: global.number_years_horizon * (annualised_capex + fom) * capacity;
     min: vom * electricity[t];
 
-#NODE HYDRO_PLANTS_GR
-    #PARAMETERS //for >100MW
-    full_capex: 2200
-    lifetime: 100.0
-    annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
-    fom = 40; // MEur/year
-    vom = 0.003; // MEur/GWh
-    // capacity_factor_hydro = import //TO DO
-    max_capacity = 1000.0; // GW
-    #VARIABLES
-    internal: capacity;
-    external: electricity[T];
-    #CONSTRAINTS
-    electricity[t] <= capacity_factor_wind[t] * capacity;
-    capacity <= max_capacity;
-    capacity >= 0;
-    electricity[t] >= 0;
-    #OBJECTIVES
-    min: global.number_years_horizon * (annualised_capex + fom) * capacity;
-    min: vom * electricity[t];
-    
-
 #NODE BATTERY_STORAGE_GR = import BATTERY_STORAGE from "remote_hub_wacc.gboml";
 #NODE HVDC_GR = import HVDC from "remote_hub_wacc.gboml" with full_capex_lines = 0.25*100;
 #NODE ELECTROLYSIS_PLANTS_GR = import ELECTROLYSIS_PLANTS from "remote_hub_wacc.gboml";
