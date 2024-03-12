@@ -39,7 +39,7 @@ cap_co2 = 0.0; // kt C02
 	demand = import "..\..\data\demand_ng.csv"; // /!\ Gas Demand Constant // GWh (ch4)
     conversion_factor = 15.31; // GWh/kt of liquefied gas
 	#CONSTRAINTS
-	conversion_factor * LIQUEFIED_METHANE_REGASIFICATION.methane[t] == demand[t];
+	conversion_factor * LIQUEFIED_METHANE_REGASIFICATION.methane[t] == 10 * demand[t];
 
 // Methane Balance Belgium Liquid
 #HYPEREDGE DESTINATION_LIQUEFIED_METHANE_BALANCE
@@ -90,51 +90,153 @@ cap_co2 = 0.0; // kt C02
     min: global.number_years_horizon * (annualised_capex + fom) * capacity;
     min: vom * electricity[t];
 
-#NODE HYDRO_BASIN_GR
+#NODE HYDRO_BASIN_03h_GR
     #PARAMETERS
-    initial_storage = 50.0 * 1e6; // MCM * 1e6 = m³, example initial storage
-    inflow_series = import "../../data/inflow_series.csv"; // m^3/h, historical inflow data
+    // initial_storage = 35.0 * 1e6; // MCM * 1e6 = m³, yearly average (GEUS report)
+    inflow_series = import "../../data/inflow_series_03h.csv"; // m^3/h, historical inflow data
     evaporation_rate = 0.0001; // m per day, specific to basin location
-    area = 25; // km²
-    max_storage = 100.0 * 1e6; // Million cubic meters (MCM)
-    min_storage = 10.0 * 1e6; // MCM, operational minimum
+    area = 25; // km² Report 2005
+    max_storage = 22.5 * 1e6; // Million cubic meters (MCM)
+    min_storage = 5.0 * 1e6; // MCM, operational minimum
     #VARIABLES
     internal: storage[T];
     external: release[T]; 
     external: spill[T];
     #CONSTRAINTS
-    storage[0] == initial_storage + inflow_series[0]; // Set initial storage level
-    storage[t] == storage[t-1] + inflow_series[t] - release[t] - spill[t] - evaporation_rate * area; // Adjust for evaporation over area and days
+    storage[0] == storage[T-1];
+    //storage[t+1] == storage[t] + inflow_series[t+1] - release[t+1] - spill[t+1] - (evaporation_rate * area * 1e6 / 24);
     storage[t] <= max_storage;
     storage[t] >= min_storage;
-    release[t] + spill[t] <= inflow_series[t] + storage[t-1] - storage[t];
+    release[t] + spill[t] <= inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
     release[t] >= 0;
     spill[t] >= 0;
-    #OBJECTIVES
-    min: spill[t]; // Minimize spillage
+    // #OBJECTIVES
+    // min: 0; // Minimize spillage /!\ Ce n'est pas un coût 
 
-#HYPEREDGE BASIN_TO_HYDRO
+#HYPEREDGE BASIN_TO_HYDRO_03h
     #CONSTRAINTS
-    water_balance: HYDRO_BASIN_GR.release[t] == HYDRO_PLANT_GR.release[t];
+    water_balance: HYDRO_BASIN_03h_GR.release[t] == HYDRO_PLANT_03h_GR.release[t];
 
-#NODE HYDRO_PLANT_GR
-    #PARAMETERS //for >50MW
+#NODE HYDRO_PLANT_03h_GR
+    #PARAMETERS // for >= 50MW
     full_capex = 1713; // in MEur/GW --> source = IRENA 2000-2021
     lifetime = 100.0;
     annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
     fom = 40; // MEur/year
     vom = 0.003; // MEur/GWh
-    efficiency = 0.9;
-    // max_capacity = 300.0; // GW, example maximum capacity
-    capacity = 5.0;
+    efficiency = 0.87;
+    max_capacity = 0.04; // GW, hydropower resource 2005
     #VARIABLES
-    // internal: capacity;
+    internal: capacity;
     external: electricity[T];
     external: release[T]; // Release is water released to turbine
     #CONSTRAINTS
-    electricity[t] <= efficiency * release[t] * capacity; // NON LINEAR BECAUSE OF TWO VARIABLES
-    // capacity <= max_capacity;
-    // capacity >= 0;
+    electricity[t] == efficiency * release[t];
+    electricity[t] <= capacity;
+    capacity <= max_capacity;
+    capacity >= 0;
+    electricity[t] >= 0;
+    #OBJECTIVES
+    min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+    min: vom * electricity[t];
+
+
+#NODE HYDRO_BASIN_03j_GR
+    #PARAMETERS
+    // initial_storage = 35.0 * 1e6; // MCM * 1e6 = m³, yearly average (GEUS report)
+    inflow_series = import "../../data/inflow_series_03j.csv"; // m^3/h, historical inflow data
+    evaporation_rate = 0.0001; // m per day, specific to basin location
+    area = 25; // km² Report 2005
+    max_storage = 58.5 * 1e6; // Million cubic meters (MCM)
+    min_storage = 5.0 * 1e6; // MCM, operational minimum
+    #VARIABLES
+    internal: storage[T];
+    external: release[T]; 
+    external: spill[T];
+    #CONSTRAINTS
+    storage[0] == storage[T-1];
+    //storage[t+1] == storage[t] + inflow_series[t+1] - release[t+1] - spill[t+1] - (evaporation_rate * area * 1e6 / 24);
+    storage[t] <= max_storage;
+    storage[t] >= min_storage;
+    release[t] + spill[t] <= inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
+    release[t] >= 0;
+    spill[t] >= 0;
+    // #OBJECTIVES
+    // min: 0; // Minimize spillage /!\ Ce n'est pas un coût 
+
+#HYPEREDGE BASIN_TO_HYDRO_03j
+    #CONSTRAINTS
+    water_balance: HYDRO_BASIN_03j_GR.release[t] == HYDRO_PLANT_03j_GR.release[t];
+
+#NODE HYDRO_PLANT_03j_GR
+    #PARAMETERS // for >= 50MW
+    full_capex = 1713; // in MEur/GW --> source = IRENA 2000-2021
+    lifetime = 100.0;
+    annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+    fom = 40; // MEur/year
+    vom = 0.003; // MEur/GWh
+    efficiency = 0.87;
+    max_capacity = 0.099; // GW, hydropower resource 2005
+    #VARIABLES
+    internal: capacity;
+    external: electricity[T];
+    external: release[T]; // Release is water released to turbine
+    #CONSTRAINTS
+    electricity[t] == efficiency * release[t];
+    electricity[t] <= capacity;
+    capacity <= max_capacity;
+    capacity >= 0;
+    electricity[t] >= 0;
+    #OBJECTIVES
+    min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+    min: vom * electricity[t];
+
+
+#NODE HYDRO_BASIN_05h_GR
+    #PARAMETERS
+    // initial_storage = 35.0 * 1e6; // MCM * 1e6 = m³, yearly average (GEUS report)
+    inflow_series = import "../../data/inflow_series_05h.csv"; // m^3/h, historical inflow data
+    evaporation_rate = 0.0001; // m per day, specific to basin location
+    area = 25; // km² Report 2005
+    max_storage = 35.0 * 1e6; // Million cubic meters (MCM)
+    min_storage = 5.0 * 1e6; // MCM, operational minimum
+    #VARIABLES
+    internal: storage[T];
+    external: release[T]; 
+    external: spill[T];
+    #CONSTRAINTS
+    storage[0] == storage[T-1];
+    //storage[t+1] == storage[t] + inflow_series[t+1] - release[t+1] - spill[t+1] - (evaporation_rate * area * 1e6 / 24);
+    storage[t] <= max_storage;
+    storage[t] >= min_storage;
+    release[t] + spill[t] <= inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
+    release[t] >= 0;
+    spill[t] >= 0;
+    // #OBJECTIVES
+    // min: 0; // Minimize spillage /!\ Ce n'est pas un coût 
+
+#HYPEREDGE BASIN_TO_HYDRO_05h
+    #CONSTRAINTS
+    water_balance: HYDRO_BASIN_05h_GR.release[t] == HYDRO_PLANT_05h_GR.release[t];
+
+#NODE HYDRO_PLANT_05h_GR
+    #PARAMETERS // for >= 50MW
+    full_capex = 1713; // in MEur/GW --> source = IRENA 2000-2021
+    lifetime = 100.0;
+    annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+    fom = 40; // MEur/year
+    vom = 0.003; // MEur/GWh
+    efficiency = 0.87;
+    max_capacity = 0.058; // GW, hydropower resource 2005
+    #VARIABLES
+    internal: capacity;
+    external: electricity[T];
+    external: release[T]; // Release is water released to turbine
+    #CONSTRAINTS
+    electricity[t] == efficiency * release[t];
+    electricity[t] <= capacity;
+    capacity <= max_capacity;
+    capacity >= 0;
     electricity[t] >= 0;
     #OBJECTIVES
     min: global.number_years_horizon * (annualised_capex + fom) * capacity;
@@ -154,7 +256,7 @@ cap_co2 = 0.0; // kt C02
 #NODE LIQUEFIED_METHANE_CARRIERS_GR = import LIQUEFIED_METHANE_CARRIERS from "..\..\templates\remote_hub_wacc.gboml";
 #HYPEREDGE INLAND_POWER_BALANCE_GR
     #CONSTRAINTS
-    inland_power_balance_gr: OFF_WIND_PLANTS_GR.electricity[t] + ON_WIND_PLANTS_GR.electricity[t] + HYDRO_PLANT_GR.electricity[t] + BATTERY_STORAGE_GR.electricity_out[t] == BATTERY_STORAGE_GR.electricity_in[t] + HVDC_GR.electricity_in[t];
+    inland_power_balance_gr: OFF_WIND_PLANTS_GR.electricity[t] + ON_WIND_PLANTS_GR.electricity[t] + HYDRO_PLANT_03h_GR.electricity[t] + HYDRO_PLANT_03j_GR.electricity[t] + HYDRO_PLANT_05h_GR.electricity[t] + BATTERY_STORAGE_GR.electricity_out[t] == BATTERY_STORAGE_GR.electricity_in[t] + HVDC_GR.electricity_in[t];
 
 #HYPEREDGE COASTAL_POWER_BALANCE_GR
 #CONSTRAINTS
