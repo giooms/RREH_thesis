@@ -1,0 +1,9 @@
+Method 2
+BarHomogeneous 1
+Crossover 0
+FeasibilityTol=1e-6   # Tighten the feasibility tolerance for more accuracy
+BarConvTol=1e-8       # Tighten the barrier convergence tolerance
+ScaleFlag=1           # Enable scaling for numerical stability
+OutputFlag=1          # Enable output for more insight during the solve process (set to 0 to disable)
+TimeLimit=3600        # Limit the solver to one hour
+IterationLimit=1000000 # Limit the solver to one million iterations

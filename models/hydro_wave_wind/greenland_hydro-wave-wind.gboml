@@ -243,26 +243,32 @@
 
 #NODE WAVE_PLANT_GR
     #PARAMETERS
-        full_capex = 1701; // MEur/GW --> source = Denmark 2050
+        full_capex = 1701.0; // MEur/GW --> source = Denmark 2050
         lifetime = 30.0;
         annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
         fom = 0; // MEur/year --> source = Denmark 2050
         vom = 0.00744; // MEur/GWh --> source = Denmark 2050
         wave_energy_density = import "..\..\data\wave_series_goff.csv"; // GW/m
-        max_space = 60000.0; // m
+        // max_space = 60000.0; // m
+        max_unit = 230.0;
         unit_rated_power = 0.0059; // GW
-        unit_width = 260; // m
-        space_between = 40; // m, to check
+        unit_width = 260.0; // m
+        space_between = 10.0; // m, to check
     #VARIABLES
+        internal integer: num_units;
         internal: length;
         external: electricity[T];
     #CONSTRAINTS
-        electricity[t] <= wave_energy_density[t] * length;
+        electricity[t] <= wave_energy_density[t] * num_units * unit_width;
+        electricity[t] <= unit_rated_power * num_units; 
+        length == num_units * (unit_width + space_between);
         electricity[t] >= 0;
-        length <= max_space;
-        length >= 0;        
+        num_units <= max_unit;
+        num_units >= 0; 
+        length >= num_units * (unit_width + space_between) - 0.01;
+        length <= num_units * (unit_width + space_between) + 0.01;
     #OBJECTIVES
-        min: global.number_years_horizon * (annualised_capex + fom) * (unit_rated_power * length/(unit_width + space_between));
+        min: global.number_years_horizon * (annualised_capex + fom) * (unit_rated_power * num_units);
         min: vom * electricity[t];
         
 #NODE BATTERY_STORAGE_GR = import BATTERY_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
