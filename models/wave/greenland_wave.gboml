@@ -63,10 +63,12 @@
     #VARIABLES
         internal integer: num_units;
         internal: length; // m
+        internal: init_electricity[T];
         external: electricity[T]; // GW
     #CONSTRAINTS
-        electricity[t] <= wave_energy_density[t] * num_units * unit_width;
-        electricity[t] <= unit_rated_power * num_units; // PROBLEM electricity[t] should not be bigger than this 
+        init_electricity[t] == wave_energy_density[t] * num_units * unit_width;
+        electricity[t] <= init_electricity[t];
+        electricity[t] <= num_units * unit_rated_power;
         length == num_units * (unit_width + space_between);
         electricity[t] >= 0;
         num_units <= max_unit;

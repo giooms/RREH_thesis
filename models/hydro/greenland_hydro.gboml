@@ -51,7 +51,7 @@
     #PARAMETERS
         // initial_storage = 35.0 * 1e6; // MCM * 1e6 = m³, yearly average (GEUS report)
         inflow_series = import "../../data/inflow_series_03h.csv"; // m^3/h, historical inflow data
-        evaporation_rate = 0.0001; // m per day, specific to basin location
+        // evaporation_rate = 0.0001; // m per day, specific to basin location
         area = 25; // km² Report 2005
         max_storage = 22.5 * 1e6; // Million cubic meters (MCM)
         min_storage = 5.0 * 1e6; // MCM, operational minimum
@@ -88,7 +88,7 @@
         external: release[T]; // Release is water released to turbine
     #CONSTRAINTS
         electricity[t] == efficiency * release[t];
-        efficiency * release[t] <= capacity;
+        electricity[t] <= capacity;
         capacity <= max_capacity;
         capacity >= 0;
         electricity[t] >= 0;
@@ -101,7 +101,7 @@
     #PARAMETERS
         // initial_storage = 35.0 * 1e6; // MCM * 1e6 = m³, yearly average (GEUS report)
         inflow_series = import "../../data/inflow_series_03j.csv"; // m^3/h, historical inflow data
-        evaporation_rate = 0.0001; // m per day, specific to basin location
+        // evaporation_rate = 0.0001; // m per day, specific to basin location
         area = 25; // km² Report 2005
         max_storage = 58.5 * 1e6; // Million cubic meters (MCM)
         min_storage = 5.0 * 1e6; // MCM, operational minimum
@@ -115,6 +115,7 @@
         storage[t] <= max_storage;
         storage[t] >= min_storage;
         release[t] + spill[t] <= inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
+        // release[t] <= 4.95 / 0.87;
         release[t] >= 0;
         spill[t] >= 0;
     // #OBJECTIVES
@@ -139,7 +140,7 @@
         external: release[T]; // Release is water released to turbine
     #CONSTRAINTS
         electricity[t] == efficiency * release[t];
-        efficiency * release[t] <= capacity;
+        electricity[t] <= capacity;
         capacity <= max_capacity;
         capacity >= 0;
         electricity[t] >= 0;
@@ -152,7 +153,7 @@
     #PARAMETERS
         // initial_storage = 35.0 * 1e6; // MCM * 1e6 = m³, yearly average (GEUS report)
         inflow_series = import "../../data/inflow_series_05h.csv"; // m^3/h, historical inflow data
-        evaporation_rate = 0.0001; // m per day, specific to basin location
+        // evaporation_rate = 0.0001; // m per day, specific to basin location
         area = 25; // km² Report 2005
         max_storage = 35.0 * 1e6; // Million cubic meters (MCM)
         min_storage = 5.0 * 1e6; // MCM, operational minimum
@@ -190,7 +191,7 @@
         external: release[T]; // Release is water released to turbine
     #CONSTRAINTS
         electricity[t] == efficiency * release[t];
-        efficiency * release[t] <= capacity;
+        electricity[t] <= capacity;
         capacity <= max_capacity;
         capacity >= 0;
         electricity[t] >= 0;
@@ -212,7 +213,7 @@
 #NODE LIQUEFIED_METHANE_CARRIERS_GR = import LIQUEFIED_METHANE_CARRIERS from "..\..\templates\remote_hub_wacc.gboml";
 #HYPEREDGE INLAND_POWER_BALANCE_GR
     #CONSTRAINTS
-        inland_power_balance_gr: HYDRO_PLANT_03h_GR.electricity[t] + HYDRO_PLANT_03j_GR.electricity[t] + HYDRO_PLANT_05h_GR.electricity[t] + BATTERY_STORAGE_GR.electricity_out[t] == BATTERY_STORAGE_GR.electricity_in[t] + HVDC_GR.electricity_in[t];
+        inland_power_balance_gr: HYDRO_PLANT_03j_GR.electricity[t] + HYDRO_PLANT_05h_GR.electricity[t] + BATTERY_STORAGE_GR.electricity_out[t] == BATTERY_STORAGE_GR.electricity_in[t] + HVDC_GR.electricity_in[t];
 
 #HYPEREDGE COASTAL_POWER_BALANCE_GR
     #CONSTRAINTS
