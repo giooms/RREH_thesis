@@ -49,12 +49,12 @@
 
 #NODE HYDRO_BASIN_03h_GR
     #PARAMETERS
-        // initial_storage = 35.0 * 1e6; // MCM * 1e6 = m³, yearly average (GEUS report)
-        inflow_series = import "../../data/inflow_series_03h.csv"; // m^3/h, historical inflow data
+        // initial_storage = 35.0 * 1e3; // thousands of cubic meters (TCM), yearly average (GEUS report)
+        inflow_series = import "../../data/inflow_series_03h.csv"; // TCM/h, historical inflow data
         // evaporation_rate = 0.0001; // m per day, specific to basin location
         area = 25; // km² Report 2005
-        max_storage = 22.5 * 1e6; // Million cubic meters (MCM)
-        min_storage = 5.0 * 1e6; // MCM, operational minimum
+        max_storage = 22.5 * 1e3; // TCM
+        min_storage = 5.0 * 1e3; // TCM, operational minimum
     #VARIABLES
         internal: storage[T];
         external: release[T]; 
@@ -99,12 +99,12 @@
 
 #NODE HYDRO_BASIN_03j_GR
     #PARAMETERS
-        // initial_storage = 35.0 * 1e6; // MCM * 1e6 = m³, yearly average (GEUS report)
-        inflow_series = import "../../data/inflow_series_03j.csv"; // m^3/h, historical inflow data
+        // initial_storage = 35.0 * 1e3; // TCM, yearly average (GEUS report)
+        inflow_series = import "../../data/inflow_series_03j.csv"; // TCM/h, historical inflow data
         // evaporation_rate = 0.0001; // m per day, specific to basin location
         area = 25; // km² Report 2005
-        max_storage = 58.5 * 1e6; // Million cubic meters (MCM)
-        min_storage = 5.0 * 1e6; // MCM, operational minimum
+        max_storage = 58.5 * 1e3; // TCM
+        min_storage = 5.0 * 1e3; // TCM, operational minimum
     #VARIABLES
         internal: storage[T];
         external: release[T]; 
@@ -151,12 +151,12 @@
 
 #NODE HYDRO_BASIN_05h_GR
     #PARAMETERS
-        // initial_storage = 35.0 * 1e6; // MCM * 1e6 = m³, yearly average (GEUS report)
-        inflow_series = import "../../data/inflow_series_05h.csv"; // m^3/h, historical inflow data
+        // initial_storage = 35.0 * 1e3; // TCM * 1e6 = m³, yearly average (GEUS report)
+        inflow_series = import "../../data/inflow_series_05h.csv"; // TCM/h, historical inflow data
         // evaporation_rate = 0.0001; // m per day, specific to basin location
         area = 25; // km² Report 2005
-        max_storage = 35.0 * 1e6; // Million cubic meters (MCM)
-        min_storage = 5.0 * 1e6; // MCM, operational minimum
+        max_storage = 35.0 * 1e3; // TCM
+        min_storage = 5.0 * 1e3; // TCM, operational minimum
     #VARIABLES
         internal: storage[T];
         external: release[T]; 

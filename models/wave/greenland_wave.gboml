@@ -60,21 +60,27 @@
         unit_rated_power = 0.0059; // GW
         unit_width = 260.0; // m
         space_between = 10.0; // m, to check
+        M = 10000;
     #VARIABLES
         internal integer: num_units;
         internal: length; // m
         internal: init_electricity[T];
+        internal: up_bound;
         external: electricity[T]; // GW
+        internal binary: z_t[T];
     #CONSTRAINTS
         init_electricity[t] == wave_energy_density[t] * num_units * unit_width;
+        up_bound == num_units * unit_rated_power;
+        init_electricity[t]-up_bound <= M*z_t[t];
+        up_bound-init_electricity[t] <= M*(1-z_t[t]);
+        electricity[t] <= up_bound;         
         electricity[t] <= init_electricity[t];
-        electricity[t] <= num_units * unit_rated_power;
+        electricity[t] >= init_electricity[t] - M * z_t[t];
+        electricity[t] >= up_bound - M * (1 - z_t[t]);
         length == num_units * (unit_width + space_between);
         electricity[t] >= 0;
         num_units <= max_unit;
         num_units >= 0; 
-        // length >= num_units * (unit_width + space_between) - 0.01;
-        // length <= num_units * (unit_width + space_between) + 0.01;
     #OBJECTIVES
         min: global.number_years_horizon * (annualised_capex + fom) * (unit_rated_power * num_units);
         min: vom * electricity[t];

@@ -1,4 +1,4 @@
-Method 1
+Method 2
 BarHomogeneous 1
 Crossover 0
 ScaleFlag=1           # Enable scaling for numerical stability

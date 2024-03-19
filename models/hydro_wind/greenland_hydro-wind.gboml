@@ -50,24 +50,24 @@ cap_co2 = 0.0; // kt C02
 
 #NODE OFF_WIND_PLANTS_GR
     #PARAMETERS
-    full_capex = 1800; // MEur/GW --> source = Denmark 2030
-    lifetime = 30.0;
-    annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
-    fom = 39; // MEur/year --> source = Denmark 2030
-    vom = 0.00389; // MEur/GWh --> source = Denmark 2030
-    capacity_factor_off_wind = import "..\..\data\load_factor_woff_GL.csv"; // Dimensionless
-    max_capacity = 1000.0; // GW
+        full_capex = 1800; // MEur/GW --> source = Denmark 2030
+        lifetime = 30.0;
+        annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+        fom = 39; // MEur/year --> source = Denmark 2030
+        vom = 0.00389; // MEur/GWh --> source = Denmark 2030
+        capacity_factor_off_wind = import "..\..\data\load_factor_woff_GL.csv"; // Dimensionless
+        max_capacity = 1000.0; // GW
     #VARIABLES
-    internal: capacity;
-    external: electricity[T];
+        internal: capacity;
+        external: electricity[T];
     #CONSTRAINTS
-    electricity[t] <= capacity_factor_off_wind[t] * capacity;
-    capacity <= max_capacity;
-    capacity >= 0;
-    electricity[t] >= 0;
+        electricity[t] == capacity_factor_off_wind[t] * capacity;
+        capacity <= max_capacity;
+        capacity >= 0;
+        electricity[t] >= 0;
     #OBJECTIVES
-    min: global.number_years_horizon * (annualised_capex + fom) * capacity;
-    min: vom * electricity[t];
+        min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+        min: vom * electricity[t];
 
 #NODE ON_WIND_PLANTS_GR
     #PARAMETERS
@@ -82,7 +82,7 @@ cap_co2 = 0.0; // kt C02
     internal: capacity;
     external: electricity[T];
     #CONSTRAINTS
-    electricity[t] <= capacity_factor_wind[t] * capacity;
+    electricity[t] == capacity_factor_wind[t] * capacity;
     capacity <= max_capacity;
     capacity >= 0;
     electricity[t] >= 0;
@@ -92,12 +92,12 @@ cap_co2 = 0.0; // kt C02
 
 #NODE HYDRO_BASIN_03h_GR
     #PARAMETERS
-    // initial_storage = 35.0 * 1e6; // MCM * 1e6 = m³, yearly average (GEUS report)
-    inflow_series = import "../../data/inflow_series_03h.csv"; // m^3/h, historical inflow data
+    // initial_storage = 35.0 * 1e6; // thousands of cubic meters (TCM), yearly average (GEUS report)
+    inflow_series = import "../../data/inflow_series_03h.csv"; // TCM/h, historical inflow data
     evaporation_rate = 0.0001; // m per day, specific to basin location
     area = 25; // km² Report 2005
-    max_storage = 22.5 * 1e6; // Million cubic meters (MCM)
-    min_storage = 5.0 * 1e6; // MCM, operational minimum
+    max_storage = 22.5 * 1e3; // (TCM)
+    min_storage = 5.0 * 1e3; // TCM, operational minimum
     #VARIABLES
     internal: storage[T];
     external: release[T]; 
@@ -143,12 +143,12 @@ cap_co2 = 0.0; // kt C02
 
 #NODE HYDRO_BASIN_03j_GR
     #PARAMETERS
-    // initial_storage = 35.0 * 1e6; // MCM * 1e6 = m³, yearly average (GEUS report)
-    inflow_series = import "../../data/inflow_series_03j.csv"; // m^3/h, historical inflow data
+    // initial_storage = 35.0 * 1e3; // TCM * 1e6 = m³, yearly average (GEUS report)
+    inflow_series = import "../../data/inflow_series_03j.csv"; // TCM/h, historical inflow data
     evaporation_rate = 0.0001; // m per day, specific to basin location
     area = 25; // km² Report 2005
-    max_storage = 58.5 * 1e6; // Million cubic meters (MCM)
-    min_storage = 5.0 * 1e6; // MCM, operational minimum
+    max_storage = 58.5 * 1e3; // (TCM)
+    min_storage = 5.0 * 1e3; // TCM, operational minimum
     #VARIABLES
     internal: storage[T];
     external: release[T]; 
@@ -194,12 +194,12 @@ cap_co2 = 0.0; // kt C02
 
 #NODE HYDRO_BASIN_05h_GR
     #PARAMETERS
-    // initial_storage = 35.0 * 1e6; // MCM * 1e6 = m³, yearly average (GEUS report)
-    inflow_series = import "../../data/inflow_series_05h.csv"; // m^3/h, historical inflow data
+    // initial_storage = 35.0 * 1e3; // TCM , yearly average (GEUS report)
+    inflow_series = import "../../data/inflow_series_05h.csv"; // TCM/h, historical inflow data
     evaporation_rate = 0.0001; // m per day, specific to basin location
     area = 25; // km² Report 2005
-    max_storage = 35.0 * 1e6; // Million cubic meters (MCM)
-    min_storage = 5.0 * 1e6; // MCM, operational minimum
+    max_storage = 35.0 * 1e3; // (TCM)
+    min_storage = 5.0 * 1e3; // TCM, operational minimum
     #VARIABLES
     internal: storage[T];
     external: release[T]; 
