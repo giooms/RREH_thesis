@@ -139,7 +139,7 @@ def compute_and_plot_balances(scenario, d, results_path, timehorizon):
         os.makedirs(img_folder_path)
     
     # Define the save path for the plot within the newly created folder
-    save_filename = f"{scenario}_{timehorizon}_balance_plots.png"  # Or include more details in the name as needed
+    save_filename = f"{scenario}_{timehorizon}_balance_plots.pdf"  # Or include more details in the name as needed
     fig_save_path = os.path.join(img_folder_path, save_filename)
     
     # Save the figure
@@ -229,6 +229,9 @@ def calculate_plant_capacities(d):
                 if capacity_values:
                     plant_capacities[element_name] = np.sum(capacity_values)
 
+    plant_capacities['battery_flow'] = np.sum(d.solution.elements.BATTERY_STORAGE_GR.variables.capacity_flow.values)
+    plant_capacities['battery_stock'] = np.sum(d.solution.elements.BATTERY_STORAGE_GR.variables.capacity_stock.values)
+
     return plant_capacities
 
 def plot_and_save_capacities(capacities, scenario, results_path, timehorizon):
@@ -236,11 +239,13 @@ def plot_and_save_capacities(capacities, scenario, results_path, timehorizon):
     hydro_keys = [k for k in capacities if "HYDRO_PLANT" in k]
     total_hydro_capacity = sum(capacities[k] for k in hydro_keys)
     
-    categories = ['Onshore Wind', 'Offshore Wind', 'Wave',]
+    categories = ['Onshore Wind', 'Offshore Wind', 'Wave', 'Battery Flow', 'Battery Stock']
     capacity_values = [
         capacities.get('wind_onshore_gr', 0),
         capacities.get('wind_offshore_gr', 0),
-        capacities.get('wave_gr', 0)
+        capacities.get('wave_gr', 0),
+        capacities.get('battery_flow', 0),
+        capacities.get('battery_stock', 0),
     ]
     
     # Only add the total hydro capacity if there are hydro plants
@@ -276,7 +281,7 @@ def plot_and_save_capacities(capacities, scenario, results_path, timehorizon):
     if not os.path.exists(img_folder_path):
         os.makedirs(img_folder_path)
     
-    general_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_general_capacities.png")
+    general_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_general_capacities.pdf")
     fig.savefig(general_cap_fig_path)
     plt.close(fig)
     
@@ -306,7 +311,7 @@ def plot_individual_hydro_capacities(hydro_keys, capacities, scenario, img_folde
                     ha='center', va='bottom')
     
     plt.tight_layout()
-    hydro_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_hydro_capacities.png")
+    hydro_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_hydro_capacities.pdf")
     fig.savefig(hydro_cap_fig_path)
     plt.close(fig)
 
@@ -373,69 +378,57 @@ def plot_cost_breakdown(detailed_costs, demand_in_mwh, title, results_path, scen
         os.makedirs(img_folder_path)
     
     if source == 'BE':
-        cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_BE.png")
+        cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_BE.pdf")
     else:  # Default to 'GR' if not specified or for any other value
-        cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_GR.png")
+        cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_GR.pdf")
     fig.savefig(cost_breakdown_fig_path)
     plt.close(fig)  # Close the plot to release memory
 
 def plot_production_dynamics(d, results_path, scenario, timehorizon, start_date='2015-01-01'):
-    # Initialize production data dictionary
     production_data = {}
 
     # Determine which production types to include based on the scenario
-    if scenario == 'combined':
-        production_types = ['OFF_WIND_PLANTS_GR', 'ON_WIND_PLANTS_GR', 'HYDRO_PLANT_03h_GR', 'HYDRO_PLANT_03j_GR', 'HYDRO_PLANT_05h_GR', 'WAVE_PLANT_GR']
-    elif scenario == 'wind_onshore':
-        production_types = ['ON_WIND_PLANTS_GR']
-    elif scenario == 'wind_offshore':
-        production_types = ['OFF_WIND_PLANTS_GR']
-    elif scenario == 'hydro':
-        production_types = ['HYDRO_PLANT_03h_GR', 'HYDRO_PLANT_03j_GR', 'HYDRO_PLANT_05h_GR']
-    elif scenario == 'wave':
-        production_types = ['WAVE_PLANT_GR']
-    else:
-        production_types = []
+    production_types_mapping = {
+        'combined': ['OFF_WIND_PLANTS_GR', 'ON_WIND_PLANTS_GR', 'HYDRO_PLANT_03h_GR', 'HYDRO_PLANT_03j_GR', 'HYDRO_PLANT_05h_GR', 'WAVE_PLANT_GR'],
+        'wind_onshore': ['ON_WIND_PLANTS_GR'],
+        'wind_offshore': ['OFF_WIND_PLANTS_GR'],
+        'hydro': ['HYDRO_PLANT_03h_GR', 'HYDRO_PLANT_03j_GR', 'HYDRO_PLANT_05h_GR'],
+        'wave': ['WAVE_PLANT_GR']
+    }
+    production_types = production_types_mapping.get(scenario, [])
 
-    # Populate production_data for available production types in the scenario
     for production_type in production_types:
-        production_data[production_type] = np.array(getattr(d.solution.elements, production_type).variables.electricity.values)
+        data = np.array(getattr(d.solution.elements, production_type).variables.electricity.values)
+        production_data[production_type] = data if np.max(data) >= 0.001 else np.zeros_like(data)
 
-    # Continue only if there's data to plot
     if not production_data:
         return
 
-    # Create date range for the datasets
     date_range = pd.date_range(start=start_date, periods=len(next(iter(production_data.values()))), freq='H')
-
-    # Plotting
-    # Ensure the number of rows for subplots matches the length of production data
     num_plots = len(production_data)
-    fig, axs = plt.subplots(num_plots, 1, figsize=(12, num_plots * 2), sharex=True, constrained_layout=True)
-
-    # If there's only one plot, axs will not be an iterable, so we make it a list
+    fig, axs = plt.subplots(num_plots, 1, figsize=(12, num_plots * 2), sharex=True)
     if num_plots == 1:
-        axs = [axs]  # Make it a list of one Axes object
-        colors = [plt.cm.viridis(0.5)]  # Use the middle of the colormap for a single plot
+        axs = [axs]
+        colors = [plt.cm.viridis(0.5)]
     else:
         colors = plt.cm.viridis(np.linspace(0, 1, num_plots))
 
-    for ax, (production_type, data), color in zip(axs, production_data.items(), colors):
-        date_range = pd.date_range(start=start_date, periods=len(data), freq='H')
-        df = pd.DataFrame(data, index=date_range, columns=['Elec']).rolling(window=24).mean()
-        ax.fill_between(df.index, df['Elec'], color=color)
+    for ax, ((production_type, production_data), color) in zip(axs, zip(production_data.items(), colors)):
+        data_series = pd.Series(production_data).rolling(window=24).mean()
+        if data_series.max() < 0.001:
+            ax.axhline(y=0, color='k', linestyle='--')
+            ax.set_ylim(-0.1, 0.1)
+        else:
+            ax.fill_between(date_range, data_series, color=color)
         ax.set_title(f'{production_type.replace("_", " ").title()} Production (Greenland)', fontsize=10, loc='left')
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
         ax.xaxis.set_major_locator(mdates.MonthLocator())
         ax.set_ylabel('GWh')
 
-    # Save the plot
     img_folder_name = f"img_{timehorizon}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
-    if not os.path.exists(img_folder_path):
-        os.makedirs(img_folder_path)
-    
-    production_fig_path = os.path.join(img_folder_path, f"{scenario}_production_dynamics.png")
+    os.makedirs(img_folder_path, exist_ok=True)
+    production_fig_path = os.path.join(img_folder_path, f"{scenario}_production_dynamics.pdf")
     fig.savefig(production_fig_path)
     plt.close(fig)
 
@@ -443,27 +436,28 @@ def plot_basin_dynamics(d, results_path, scenario, timehorizon, start_date='2015
     if scenario not in ['hydro', 'combined']:
         return  # Only proceed if the correct scenario
 
-    # Use ls_nodes to filter for hydro basin nodes
     ls_nodes = list(d.model.nodes.keys())
     hydro_basin_nodes = [node for node in ls_nodes if 'HYDRO_BASIN' in node]
 
-    # Assuming a one year period with hourly data
     date_range = pd.date_range(start=start_date, periods=17544, freq='H')
     colors = plt.cm.viridis(np.linspace(0, 1, 4))
 
     for basin_name in hydro_basin_nodes:
         basin_data = {
-            'inflow': np.array(getattr(d.model.nodes, basin_name).parameters.inflow_series[:17544]),
-            'storage': np.array(getattr(d.solution.elements, basin_name).variables.storage.values),
-            'release': np.array(getattr(d.solution.elements, basin_name).variables.release.values),
-            'spill': np.array(getattr(d.solution.elements, basin_name).variables.spill.values)
+            'inflow': getattr(d.model.nodes, basin_name).parameters.inflow_series[:17544],
+            'storage': getattr(d.solution.elements, basin_name).variables.storage.values,
+            'release': getattr(d.solution.elements, basin_name).variables.release.values,
+            'spill': getattr(d.solution.elements, basin_name).variables.spill.values
         }
 
-        # Create subplots for each parameter
         fig, axs = plt.subplots(4, 1, figsize=(12, 12), sharex=True)
-        
         for idx, (param, ax) in enumerate(zip(['inflow', 'storage', 'release', 'spill'], axs)):
-            ax.plot(date_range, pd.Series(basin_data[param]).rolling(window=24).mean(), color=colors[idx])
+            data_series = pd.Series(basin_data[param]).rolling(window=24).mean()
+            if data_series.max() < 0.001:
+                ax.axhline(y=0, color='k', linestyle='--')
+                ax.set_ylim(-0.1, 0.1)
+            else:
+                ax.plot(date_range, data_series, color=colors[idx])
             ax.set_title(f"{basin_name} {param} dynamics", fontsize=10, loc='left')
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
             ax.xaxis.set_major_locator(mdates.MonthLocator())
@@ -474,54 +468,47 @@ def plot_basin_dynamics(d, results_path, scenario, timehorizon, start_date='2015
         plt.xlabel('Time')
         fig.tight_layout()
 
-        # Save the figure
         img_folder_name = f"img_{timehorizon}" if timehorizon else "img_all"
         img_folder_path = os.path.join(results_path, img_folder_name)
         os.makedirs(img_folder_path, exist_ok=True)
-        basin_fig_path = os.path.join(img_folder_path, f"{scenario}_{basin_name}_dynamics.png")
+        basin_fig_path = os.path.join(img_folder_path, f"{scenario}_{basin_name}_dynamics.pdf")
         fig.savefig(basin_fig_path)
         plt.close(fig)
 
 def plot_storage_dynamics(d, results_path, scenario, timehorizon, start_date='2015-01-01'):
-
-    # Create date range for the datasets
     date_range = pd.date_range(start=start_date, periods=17544, freq='H')
 
-    # Prepare data according to the scenario
     battery_data = np.array(d.solution.elements.BATTERY_STORAGE_GR.variables.electricity_stored.values)
     hydrogen_data = np.array(d.solution.elements.HYDROGEN_STORAGE_GR.variables.hydrogen_stored.values)
     methane_data_src = np.array(d.solution.elements.LIQUEFIED_METHANE_STORAGE_HUB_GR.variables.liquefied_methane_stored.values)
     methane_data_dest = np.array(d.solution.elements.LIQUEFIED_METHANE_STORAGE_DESTINATION.variables.liquefied_methane_stored.values)
 
-    # Create DataFrames
-    battery_df = pd.DataFrame({'Battery': battery_data}, index=date_range).rolling(window=24).mean()
-    hydrogen_df = pd.DataFrame({'Hydrogen': hydrogen_data}, index=date_range).rolling(window=24).mean()
-    methane_df_gr = pd.DataFrame({'Methane': methane_data_src}, index=date_range).rolling(window=24).mean()
-    methane_df_be = pd.DataFrame({'Methane': methane_data_dest}, index=date_range).rolling(window=24).mean()
-
-    # Plotting
     fig, axs = plt.subplots(4, 1, figsize=(12, 8), sharex=True)
     colors = plt.cm.viridis(np.linspace(0, 1, 4))
     storage_labels = ['Battery Storage Dynamics', 'Hydrogen Storage Dynamics', 'Liquid Methane Storage Dynamics (Greenland)', 'Liquid Methane Storage Dynamics (Belgium)']
 
-    for ax, df, color, label in zip(axs, [battery_df, hydrogen_df, methane_df_gr, methane_df_be], colors, storage_labels):
-        ax.plot(df.index, df.iloc[:, 0], label=label, color=color)
+    data_frames = [battery_data, hydrogen_data, methane_data_src, methane_data_dest]
+
+    for ax, data, color, label in zip(axs, data_frames, colors, storage_labels):
+        data_series = pd.Series(data).rolling(window=24).mean()
+        if data_series.max() < 0.001:
+            ax.axhline(y=0, color='k', linestyle='--')
+            ax.set_ylim(-0.1, 0.1)
+        else:
+            ax.plot(date_range, data_series, label=label, color=color)
         ax.set_title(label, fontsize=10, loc='left')
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
         ax.xaxis.set_major_locator(mdates.MonthLocator())
         ax.set_ylabel('GWh')
         ax.legend(loc='upper right')
 
-    # Adjust layout and show plot
     fig.tight_layout()
 
-    # Save the plot
     img_folder_name = f"img_{timehorizon}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
-    if not os.path.exists(img_folder_path):
-        os.makedirs(img_folder_path)
+    os.makedirs(img_folder_path, exist_ok=True)
     
-    storage_dynamics_fig_path = os.path.join(img_folder_path, f"{scenario}_storage_dynamics.png")
+    storage_dynamics_fig_path = os.path.join(img_folder_path, f"{scenario}_storage_dynamics.pdf")
     fig.savefig(storage_dynamics_fig_path)
     plt.close(fig)
 
@@ -534,8 +521,6 @@ def analyze_and_plot_tech_capacities(scenario, d, results_path, timehorizon):
 def calculate_plant_tech_capacities(d):
     plant_capacities = {}
     
-    plant_capacities['battery_flow'] = np.sum(d.solution.elements.BATTERY_STORAGE_GR.variables.capacity_flow.values)
-    plant_capacities['battery_stock'] = np.sum(d.solution.elements.BATTERY_STORAGE_GR.variables.capacity_stock.values)
     plant_capacities['electrolysis'] = np.sum(d.solution.elements.ELECTROLYSIS_PLANTS_GR.variables.capacity.values)
     plant_capacities['dac'] = np.sum(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_GR.variables.capacity.values)
     plant_capacities['methanation'] = np.sum(d.solution.elements.METHANATION_PLANTS_GR.variables.capacity.values)
@@ -544,11 +529,8 @@ def calculate_plant_tech_capacities(d):
 
 def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizon):
     
-    categories = ['Battery Flow', 'Battery Stock', 'Electrolysis ',
-                'DAC', 'Methanation']
+    categories = ['Electrolysis ', 'DAC', 'Methanation']
     capacity_values = [
-        capacities.get('battery_flow', 0),
-        capacities.get('battery_stock', 0),
         capacities.get('electrolysis', 0),
         capacities.get('dac', 0),
         capacities.get('methanation', 0)
@@ -560,7 +542,7 @@ def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizo
     fig, ax = plt.subplots(figsize=(10, 6))
     bars = ax.bar(categories, capacity_values, color=color)
     
-    ax.set_ylabel('Installed Capacity (GW)')
+    ax.set_ylabel('Installed Capacity (kt/h)')
     ax.set_title(f'Installed Tech Capacities for {scenario.capitalize()} Scenario')
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
@@ -570,7 +552,7 @@ def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizo
     # Add labels above the bars
     for bar in bars:
         height = bar.get_height()
-        ax.annotate(f'{height:.3f} GW',
+        ax.annotate(f'{height:.3f} kt/h',
                     xy=(bar.get_x() + bar.get_width() / 2, height),
                     xytext=(0, 3),  # 3 points vertical offset
                     textcoords='offset points',
@@ -582,7 +564,7 @@ def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizo
     if not os.path.exists(img_folder_path):
         os.makedirs(img_folder_path)
     
-    general_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_tech_capacities.png")
+    general_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_tech_capacities.pdf")
     fig.savefig(general_cap_fig_path)
     plt.close(fig)
 
@@ -627,8 +609,8 @@ def main():
         "hydro_3h_gr": [],
         "hydro_3j_gr": [],
         "hydro_5h_gr": [],
-        "Battery Flow": [],
-        "Battery Stock": [],
+        "battery_flow": [],
+        "battery_stock": [],
         "Electrolysis": [],
         "DAC": [],
         "Methanation": [],
@@ -683,7 +665,7 @@ def main():
 
                 # Aggregate plant capacities
                 # Direct mapping for non-hydro capacities
-                for capacity_type in ["wind_onshore_gr", "wind_offshore_gr", "wave_gr"]:
+                for capacity_type in ["wind_onshore_gr", "wind_offshore_gr", "wave_gr", "battery_flow", "battery_stock"]:
                     aggregated_data[capacity_type].append(plant_capacities.get(capacity_type, "NA"))
 
                 # Handle hydro capacities
@@ -725,7 +707,7 @@ def main():
                 print(f"Retrieving and plotting installed side tech capacities for {scenario} with time horizon {args.timehorizon}")
                 tech_capacities = analyze_and_plot_tech_capacities(scenario, data, results_path, args.timehorizon)
 
-                for tech_type in ["Battery Flow", "Battery Stock", "Electrolysis", "DAC", "Methanation"]:
+                for tech_type in ["Electrolysis", "DAC", "Methanation"]:
                     aggregated_data[tech_type].append(tech_capacities.get(tech_type.lower().replace(" ", "_"), "NA"))  # Assuming the keys in tech_capacities are lowercase with underscores
 
     df = pd.DataFrame(aggregated_data)

@@ -2,3 +2,6 @@
 *.bkp
 *.json
 *.png
+map.py
+map.png
+map.html
