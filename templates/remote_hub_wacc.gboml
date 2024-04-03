@@ -2,7 +2,7 @@
 T=43800;
 
 #GLOBAL
-wacc = 0.07;
+wacc = 0.0441;
 number_years_horizon = T/8760;
 
 #NODE SOLAR_PV_PLANTS

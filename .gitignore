@@ -2,6 +2,7 @@
 *.bkp
 *.json
 *.png
+*.pdf
 map.py
 map.png
 map.html

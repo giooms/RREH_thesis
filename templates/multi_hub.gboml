@@ -6,7 +6,7 @@ T = 8760;
 // global parameters
 
 demand_el = import "../data/demand_el.csv";  // GWh(e) - tertiary, industry, residential and railway electricity demand + electricity heating
-wacc = 0.07;
+wacc = 0.0441;
 number_years_horizon = T/8760; 
 co2_emission_cost = 0; // 80 * 1/(10**3); // M€/kt(co2)
 e_ens_cost = 3; // M€/GWh

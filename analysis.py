@@ -10,8 +10,9 @@ import re
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Analyze GBOML model results with specific criteria.")
-    parser.add_argument('-s', '--scenarios', nargs='+', help='Scenarios to analyze (e.g., hydro wind_onshore)', default=None)
-    parser.add_argument('-t', '--timehorizon', type=int, help='Time horizon to filter by', default=None)
+    # parser.add_argument('-s', '--scenarios', nargs='+', help='Scenarios to analyze (e.g., hydro wind_onshore)', default=None)
+    parser.add_argument('-t', '--timehorizon', type=int, help='Time horizon to filter by', default=17544)
+    parser.add_argument('-r', '--report', action='store_true', help='Save as PDF without title for reports')
     return parser.parse_args()
 
 def load_results(file_path):
@@ -25,6 +26,13 @@ def plot_balance(ax, data, title):
     ax.plot(data)
     ax.set_ylim(ylim)
     ax.set_title(title)
+
+def extract_base_scenario(scenario):
+    if '_stdwacc' in scenario:
+        return scenario.split('_stdwacc')[0]
+    elif '_varwacc' in scenario:
+        return scenario.split('_varwacc')[0]
+    return scenario
 
 def compute_and_plot_balances(scenario, d, results_path, timehorizon):
     fig, axs = plt.subplots(nrows=3, ncols=3, figsize=(18, 15), constrained_layout=True)
@@ -50,9 +58,11 @@ def compute_and_plot_balances(scenario, d, results_path, timehorizon):
     battery_storage_gr_in = np.array(d.solution.elements.BATTERY_STORAGE_GR.variables.electricity_in.values)
     hvdc_gr_in = np.array(d.solution.elements.HVDC_GR.variables.electricity_in.values)
 
+    base_scenario = extract_base_scenario(scenario)
+
     # Compute and plot power balance for the scenario
-    if scenario in power_balances:
-        power_balance_gr = power_balances[scenario](d) + battery_storage_gr_out - battery_storage_gr_in - hvdc_gr_in
+    if base_scenario in power_balances:
+        power_balance_gr = power_balances[base_scenario](d) + battery_storage_gr_out - battery_storage_gr_in - hvdc_gr_in
         plot_balance(axs[0], power_balance_gr, f'{scenario} GR_Inland Power Balance')
 
     # GR_CO2 Balance
@@ -131,7 +141,7 @@ def compute_and_plot_balances(scenario, d, results_path, timehorizon):
 
     plot_balance(axs[8], ch4_balance_gr, 'GR_Coastal CH4 Balance')
     
-    img_folder_name = f"img_{timehorizon}" if timehorizon else "img_all"
+    img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
     
     # Create the img_{timehorizon} folder inside the results_path if it doesn't exist
     img_folder_path = os.path.join(results_path, img_folder_name)
@@ -139,7 +149,7 @@ def compute_and_plot_balances(scenario, d, results_path, timehorizon):
         os.makedirs(img_folder_path)
     
     # Define the save path for the plot within the newly created folder
-    save_filename = f"{scenario}_{timehorizon}_balance_plots.pdf"  # Or include more details in the name as needed
+    save_filename = f"{scenario}_{timehorizon}_balance_plots.png"  # Or include more details in the name as needed
     fig_save_path = os.path.join(img_folder_path, save_filename)
     
     # Save the figure
@@ -200,9 +210,9 @@ def analyze_system_costs(d):
 
     return GR_nodes, BE_nodes, cost_GR, cost_BE, tot_cost
 
-def analyze_and_plot_capacities(scenario, d, results_path, timehorizon):
+def analyze_and_plot_capacities(scenario, d, results_path, timehorizon, report=False):
     plant_capacities = calculate_plant_capacities(d)
-    plot_and_save_capacities(plant_capacities, scenario, results_path, timehorizon)
+    plot_and_save_capacities(plant_capacities, scenario, results_path, timehorizon, report)
     
     return plant_capacities
 
@@ -234,7 +244,7 @@ def calculate_plant_capacities(d):
 
     return plant_capacities
 
-def plot_and_save_capacities(capacities, scenario, results_path, timehorizon):
+def plot_and_save_capacities(capacities, scenario, results_path, timehorizon, report):
     # Calculate total hydro capacity and prepare other categories and their capacities
     hydro_keys = [k for k in capacities if "HYDRO_PLANT" in k]
     total_hydro_capacity = sum(capacities[k] for k in hydro_keys)
@@ -260,7 +270,6 @@ def plot_and_save_capacities(capacities, scenario, results_path, timehorizon):
     bars = ax.bar(categories, capacity_values, color=color)
     
     ax.set_ylabel('Installed Capacity (GW)')
-    ax.set_title(f'Installed Renewable Capacities for {scenario.capitalize()} Scenario')
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
     # Adjust y-axis to fit the labels
@@ -276,20 +285,26 @@ def plot_and_save_capacities(capacities, scenario, results_path, timehorizon):
                     ha='center', va='bottom')
 
     # Save the general capacities plot
-    img_folder_name = f"img_{timehorizon}" if timehorizon else "img_all"
+    img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
     if not os.path.exists(img_folder_path):
         os.makedirs(img_folder_path)
     
-    general_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_general_capacities.pdf")
+    if report:
+        ax.set_title('')
+        general_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_general_capacities.pdf")
+    else: 
+        ax.set_title(f'Installed Renewable Capacities for {scenario.capitalize()} Scenario')
+        general_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_general_capacities.png")
+
     fig.savefig(general_cap_fig_path)
     plt.close(fig)
     
     # For scenarios with hydro, create a separate plot for hydro plant capacities
     if hydro_keys:
-        plot_individual_hydro_capacities(hydro_keys, capacities, scenario, img_folder_path)
+        plot_individual_hydro_capacities(hydro_keys, capacities, scenario, img_folder_path, report)
 
-def plot_individual_hydro_capacities(hydro_keys, capacities, scenario, img_folder_path):
+def plot_individual_hydro_capacities(hydro_keys, capacities, scenario, img_folder_path, report):
     
     color = [plt.cm.viridis(0.25)]
     
@@ -298,7 +313,6 @@ def plot_individual_hydro_capacities(hydro_keys, capacities, scenario, img_folde
     hydro_values = [capacities[k] for k in hydro_keys]
     bars = ax.bar(hydro_keys, hydro_values, color=color)
     ax.set_ylabel('Installed Capacity (GW)')
-    ax.set_title(f'Hydro Plant Capacities for {scenario.capitalize()} Scenario')
     ax.set_ylim(0, max(hydro_values) * 1.2)  # Ensure there is space for labels
     
     # Add labels above the bars
@@ -311,7 +325,14 @@ def plot_individual_hydro_capacities(hydro_keys, capacities, scenario, img_folde
                     ha='center', va='bottom')
     
     plt.tight_layout()
-    hydro_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_hydro_capacities.pdf")
+
+    if report: 
+        ax.set_title('')
+        hydro_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_hydro_capacities.pdf")
+    else: 
+        ax.set_title(f'Hydro Plant Capacities for {scenario.capitalize()} Scenario')
+        hydro_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_hydro_capacities.png")
+    
     fig.savefig(hydro_cap_fig_path)
     plt.close(fig)
 
@@ -344,7 +365,7 @@ def cost_rreh_detailed(d, ls):
     
     return detailed_cost
 
-def plot_cost_breakdown(detailed_costs, demand_in_mwh, title, results_path, scenario, timehorizon, source='GR'):
+def plot_cost_breakdown(detailed_costs, demand_in_mwh, title, results_path, scenario, timehorizon, source='GR', report=False):
     # Convert costs to €/MWh
     adjusted_costs = {node: cost * 1e6 / demand_in_mwh for node, cost in detailed_costs.items()}
 
@@ -361,7 +382,6 @@ def plot_cost_breakdown(detailed_costs, demand_in_mwh, title, results_path, scen
     bars = ax.barh(sorted_nodes, sorted_costs, color=colors)
 
     ax.set_xlabel('Cost (€/MWh)')
-    ax.set_title(title)
     ax.invert_yaxis()  # To match the provided image's layout
 
     # Adding the cost next to each bar
@@ -372,15 +392,23 @@ def plot_cost_breakdown(detailed_costs, demand_in_mwh, title, results_path, scen
     plt.tight_layout()  # Adjust layout
 
     # Save the cost breakdown plot
-    img_folder_name = f"img_{timehorizon}" if timehorizon else "img_all"
+    img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
     if not os.path.exists(img_folder_path):
         os.makedirs(img_folder_path)
     
-    if source == 'BE':
-        cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_BE.pdf")
-    else:  # Default to 'GR' if not specified or for any other value
-        cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_GR.pdf")
+    if report:
+        ax.set_title('')
+        if source == 'BE':
+            cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_BE.pdf")
+        else:  # Default to 'GR' if not specified or for any other value
+            cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_GR.pdf")
+    else:
+        ax.set_title(title)
+        if source == 'BE':
+            cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_BE.png")
+        else:  # Default to 'GR' if not specified or for any other value
+            cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_GR.png")        
     fig.savefig(cost_breakdown_fig_path)
     plt.close(fig)  # Close the plot to release memory
 
@@ -425,10 +453,10 @@ def plot_production_dynamics(d, results_path, scenario, timehorizon, start_date=
         ax.xaxis.set_major_locator(mdates.MonthLocator())
         ax.set_ylabel('GWh')
 
-    img_folder_name = f"img_{timehorizon}" if timehorizon else "img_all"
+    img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
     os.makedirs(img_folder_path, exist_ok=True)
-    production_fig_path = os.path.join(img_folder_path, f"{scenario}_production_dynamics.pdf")
+    production_fig_path = os.path.join(img_folder_path, f"{scenario}_production_dynamics.png")
     fig.savefig(production_fig_path)
     plt.close(fig)
 
@@ -468,10 +496,10 @@ def plot_basin_dynamics(d, results_path, scenario, timehorizon, start_date='2015
         plt.xlabel('Time')
         fig.tight_layout()
 
-        img_folder_name = f"img_{timehorizon}" if timehorizon else "img_all"
+        img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
         img_folder_path = os.path.join(results_path, img_folder_name)
         os.makedirs(img_folder_path, exist_ok=True)
-        basin_fig_path = os.path.join(img_folder_path, f"{scenario}_{basin_name}_dynamics.pdf")
+        basin_fig_path = os.path.join(img_folder_path, f"{scenario}_{basin_name}_dynamics.png")
         fig.savefig(basin_fig_path)
         plt.close(fig)
 
@@ -504,17 +532,17 @@ def plot_storage_dynamics(d, results_path, scenario, timehorizon, start_date='20
 
     fig.tight_layout()
 
-    img_folder_name = f"img_{timehorizon}" if timehorizon else "img_all"
+    img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
     os.makedirs(img_folder_path, exist_ok=True)
     
-    storage_dynamics_fig_path = os.path.join(img_folder_path, f"{scenario}_storage_dynamics.pdf")
+    storage_dynamics_fig_path = os.path.join(img_folder_path, f"{scenario}_storage_dynamics.png")
     fig.savefig(storage_dynamics_fig_path)
     plt.close(fig)
 
-def analyze_and_plot_tech_capacities(scenario, d, results_path, timehorizon):
+def analyze_and_plot_tech_capacities(scenario, d, results_path, timehorizon, report=False):
     plant_capacities = calculate_plant_tech_capacities(d)
-    plot_and_save_tech_capacities(plant_capacities, scenario, results_path, timehorizon)
+    plot_and_save_tech_capacities(plant_capacities, scenario, results_path, timehorizon, report)
     
     return plant_capacities
 
@@ -527,7 +555,7 @@ def calculate_plant_tech_capacities(d):
 
     return plant_capacities
 
-def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizon):
+def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizon, report):
     
     categories = ['Electrolysis ', 'DAC', 'Methanation']
     capacity_values = [
@@ -559,14 +587,21 @@ def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizo
                     ha='center', va='bottom')
 
     # Save the general capacities plot
-    img_folder_name = f"img_{timehorizon}" if timehorizon else "img_all"
+    img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
     if not os.path.exists(img_folder_path):
         os.makedirs(img_folder_path)
     
-    general_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_tech_capacities.pdf")
+    if report:
+        ax.set_title('')
+        general_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_tech_capacities.png")
+    else: 
+        ax.set_title(f'Installed Tech Capacities for {scenario.capitalize()} Scenario')
+        general_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_tech_capacities.png")
+
     fig.savefig(general_cap_fig_path)
     plt.close(fig)
+
 
 class MakeMeReadable:
     def __init__(self, d):
@@ -593,32 +628,35 @@ class MakeMeReadable:
 def main():
     args = parse_args()
     
-    # If scenarios are specified, use them; otherwise, analyze all scenarios
-    if args.scenarios:
-        scenarios = args.scenarios
-    else:
-        scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro', 'combined']
+    scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro', 'hydro_wind', 'combined']
 
     base_path = 'models'  # Adjust this path as necessary
 
-    aggregated_data = {
-        "scenario": [],
-        "wind_onshore_gr": [],
-        "wind_offshore_gr": [],
-        "wave_gr": [],
-        "hydro_3h_gr": [],
-        "hydro_3j_gr": [],
-        "hydro_5h_gr": [],
-        "battery_flow": [],
-        "battery_stock": [],
-        "Electrolysis": [],
-        "DAC": [],
-        "Methanation": [],
-        "price per mwh": [],
-        "total cost": []
-    }
+    csv_path = f'scripts/results/scenario_analysis_results_{args.timehorizon}.csv'
+    csv_exists = os.path.isfile(csv_path)
+    if csv_exists:
+        os.remove(csv_path)
+
+    all_data = []
 
     for scenario in scenarios:
+        aggregated_data = {
+            "scenario": [],
+            "wind_onshore_gr": [],
+            "wind_offshore_gr": [],
+            "wave_gr": [],
+            "hydro_3h_gr": [],
+            "hydro_3j_gr": [],
+            "hydro_5h_gr": [],
+            "battery_flow": [],
+            "battery_stock": [],
+            "Electrolysis": [],
+            "DAC": [],
+            "Methanation": [],
+            "price per mwh": [],
+            "total cost": []
+        }
+
         results_path = os.path.join(base_path, scenario, 'results')
 
         for file_name in os.listdir(results_path):
@@ -633,85 +671,90 @@ def main():
                     except ValueError:
                         # If the time horizon part cannot be converted to an integer, skip the file
                         continue
-                    
+
                     # Check if the extracted time horizon matches the specified one (if any)
-                    if args.timehorizon and file_timehorizon != args.timehorizon:
-                        continue
-
-                    # If the file matches the criteria, proceed with loading and analyzing the data
-                    file_path = os.path.join(results_path, file_name)
-                    data = load_results(file_path)
+                    if args.timehorizon == file_timehorizon:
+                        # Only proceed with loading and analyzing the data if time horizons match
+                        file_path = os.path.join(results_path, file_name)
+                        print(f"File path: {file_path}")
+                        data = load_results(file_path)
                 
-                file_path = os.path.join(results_path, file_name)
-                print(f"File path: {file_path}")
+                        # Split the filename on the underscores
+                        parts = file_name.split('_')
+                        # Remove the part that is just digits and the 'results.json' part
+                        scenario_parts = [part for part in parts if not part.isdigit() and not part.endswith('.json')]
+                        # Join the remaining parts back together to get the scenario name
+                        scenario_name = '_'.join(scenario_parts)
 
-                data = load_results(file_path)
-                
-                aggregated_data['scenario'].append(scenario)
+                        aggregated_data['scenario'].append(scenario_name)
 
-                # Initial check
-                print(f"Plot of balances for {scenario} with time horizon {args.timehorizon}")
-                compute_and_plot_balances(scenario, data, results_path, args.timehorizon)
+                        # Initial check
+                        print(f"Plot of balances for {scenario_name} with time horizon {args.timehorizon}")
+                        compute_and_plot_balances(scenario_name, data, results_path, args.timehorizon)
 
-                # Compute total costs
-                print(f"Computing total costs for {scenario} with time horizon {args.timehorizon}")
-                GR_nodes, BE_nodes, cost_GR, cost_BE, tot_cost = analyze_system_costs(data)
-                
-                aggregated_data['total cost'].append(tot_cost)
+                        # Compute total costs
+                        print(f"Computing total costs for {scenario_name} with time horizon {args.timehorizon}")
+                        GR_nodes, BE_nodes, cost_GR, cost_BE, tot_cost = analyze_system_costs(data)
+                        
+                        aggregated_data['total cost'].append(tot_cost)
 
-                # Retrieve and plot the installed renewable capacities
-                print(f"Retrieving and plotting installed capacities for {scenario} with time horizon {args.timehorizon}")
-                plant_capacities = analyze_and_plot_capacities(scenario, data, results_path, args.timehorizon)
+                        # Retrieve and plot the installed renewable capacities
+                        print(f"Retrieving and plotting installed capacities for {scenario_name} with time horizon {args.timehorizon}")
+                        plant_capacities = analyze_and_plot_capacities(scenario_name, data, results_path, args.timehorizon, args.report)
 
-                # Aggregate plant capacities
-                # Direct mapping for non-hydro capacities
-                for capacity_type in ["wind_onshore_gr", "wind_offshore_gr", "wave_gr", "battery_flow", "battery_stock"]:
-                    aggregated_data[capacity_type].append(plant_capacities.get(capacity_type, "NA"))
+                        # Aggregate plant capacities
+                        # Direct mapping for non-hydro capacities
+                        for capacity_type in ["wind_onshore_gr", "wind_offshore_gr", "wave_gr", "battery_flow", "battery_stock"]:
+                            aggregated_data[capacity_type].append(plant_capacities.get(capacity_type, "NA"))
 
-                # Handle hydro capacities
-                # Adapt these keys based on how they're actually named in your returned 'plant_capacities'
-                hydro_mappings = {
-                    "HYDRO_PLANT_03h_GR": "hydro_3h_gr",
-                    "HYDRO_PLANT_03j_GR": "hydro_3j_gr",
-                    "HYDRO_PLANT_05h_GR": "hydro_5h_gr",
-                }
-                for original_key, new_key in hydro_mappings.items():
-                    # Use 'NA' if not found
-                    capacity = plant_capacities.get(original_key, "NA")
-                    aggregated_data[new_key].append(capacity)
+                        # Handle hydro capacities
+                        # Adapt these keys based on how they're actually named in your returned 'plant_capacities'
+                        hydro_mappings = {
+                            "HYDRO_PLANT_03h_GR": "hydro_3h_gr",
+                            "HYDRO_PLANT_03j_GR": "hydro_3j_gr",
+                            "HYDRO_PLANT_05h_GR": "hydro_5h_gr",
+                        }
+                        for original_key, new_key in hydro_mappings.items():
+                            # Use 'NA' if not found
+                            capacity = plant_capacities.get(original_key, "NA")
+                            aggregated_data[new_key].append(capacity)
 
-                # Retrieve and plot the installed capacities
-                print(f"Computing the price of {scenario} with time horizon {args.timehorizon}")
-                price_per_mwh, demand_in_mwh = calculate_price_per_mwh(data, tot_cost, scenario, args.timehorizon)
+                        # Retrieve and plot the installed capacities
+                        print(f"Computing the price of {scenario_name} with time horizon {args.timehorizon}")
+                        price_per_mwh, demand_in_mwh = calculate_price_per_mwh(data, tot_cost, scenario_name, args.timehorizon)
 
-                aggregated_data['price per mwh'].append(price_per_mwh)
-                
-                # Plot cost breakdown
-                print(f"Plotting the cost breakdown of {scenario} with time horizon {args.timehorizon}")                
-                cost_details_GR = cost_rreh_detailed(data, GR_nodes)
-                plot_cost_breakdown(cost_details_GR, demand_in_mwh, 'Synthetic Methane (Greenland) Cost Breakdown (€/MWh)', results_path, scenario, args.timehorizon)
-                cost_details_BE = cost_rreh_detailed(data, BE_nodes)
-                plot_cost_breakdown(cost_details_BE, demand_in_mwh, 'Synthetic Methane (Belgium) Cost Breakdown (€/MWh)', results_path, scenario, args.timehorizon, 'BE')
+                        aggregated_data['price per mwh'].append(price_per_mwh)
+                        
+                        # Plot cost breakdown
+                        print(f"Plotting the cost breakdown of {scenario_name} with time horizon {args.timehorizon}")                
+                        cost_details_GR = cost_rreh_detailed(data, GR_nodes)
+                        plot_cost_breakdown(cost_details_GR, demand_in_mwh, 'Synthetic Methane (Greenland) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, 'GR' ,args.report)
+                        cost_details_BE = cost_rreh_detailed(data, BE_nodes)
+                        plot_cost_breakdown(cost_details_BE, demand_in_mwh, 'Synthetic Methane (Belgium) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, 'BE', args.report)
 
-                # Plot energy production dynamic
-                plot_production_dynamics(data, results_path, scenario, args.timehorizon)
-                
-                # Plot basins dynamic
-                if scenario in ['hydro', 'combined']:
-                    plot_basin_dynamics(data, results_path, scenario, args.timehorizon)
+                        # Plot energy production dynamic
+                        plot_production_dynamics(data, results_path, scenario_name, args.timehorizon)
+                        
+                        # Plot basins dynamic
+                        if scenario in ['hydro', 'combined']:
+                            plot_basin_dynamics(data, results_path, scenario_name, args.timehorizon)
 
-                # Plot storage dynamic
-                plot_storage_dynamics(data, results_path, scenario, args.timehorizon)
+                        # Plot storage dynamic
+                        plot_storage_dynamics(data, results_path, scenario_name, args.timehorizon)
 
-                # Retrieve and plot the installed side techs capacities
-                print(f"Retrieving and plotting installed side tech capacities for {scenario} with time horizon {args.timehorizon}")
-                tech_capacities = analyze_and_plot_tech_capacities(scenario, data, results_path, args.timehorizon)
+                        # Retrieve and plot the installed side techs capacities
+                        print(f"Retrieving and plotting installed side tech capacities for {scenario_name} with time horizon {args.timehorizon}")
+                        tech_capacities = analyze_and_plot_tech_capacities(scenario_name, data, results_path, args.timehorizon, args.report)
 
-                for tech_type in ["Electrolysis", "DAC", "Methanation"]:
-                    aggregated_data[tech_type].append(tech_capacities.get(tech_type.lower().replace(" ", "_"), "NA"))  # Assuming the keys in tech_capacities are lowercase with underscores
+                        for tech_type in ["Electrolysis", "DAC", "Methanation"]:
+                            aggregated_data[tech_type].append(tech_capacities.get(tech_type.lower().replace(" ", "_"), "NA"))  # Assuming the keys in tech_capacities are lowercase with underscores
 
-    df = pd.DataFrame(aggregated_data)
-    df.to_csv("scripts/results/scenario_analysis_results.csv", index=False)
+        all_data.append(aggregated_data)
+
+    df = pd.DataFrame(all_data)  # Ensuring data is in a list to form a single row
+    df.to_csv(csv_path, index=False)
+
+    print(f"Data for {scenario} appended to {csv_path}")
 
 if __name__ == "__main__":
     main()
