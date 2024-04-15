@@ -10,10 +10,15 @@ import re
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Analyze GBOML model results with specific criteria.")
+    parser = parser.add_argument('-m', '--mode', help="Mode of operation: analyze_json or analyze_csv", default='analyze_json', choices=['analyze_json', 'analyze_csv'])
     # parser.add_argument('-s', '--scenarios', nargs='+', help='Scenarios to analyze (e.g., hydro wind_onshore)', default=None)
     parser.add_argument('-t', '--timehorizon', type=int, help='Time horizon to filter by', default=17544)
     parser.add_argument('-r', '--report', action='store_true', help='Save as PDF without title for reports')
     return parser.parse_args()
+
+# =============== ============== ===============
+# ============= JSON FILES ANALYSIS =============
+# =============== ============== ===============
 
 def load_results(file_path):
     with open(file_path, 'r') as file:
@@ -602,7 +607,6 @@ def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizo
     fig.savefig(general_cap_fig_path)
     plt.close(fig)
 
-
 class MakeMeReadable:
     def __init__(self, d):
         self.d = d
@@ -625,8 +629,7 @@ class MakeMeReadable:
     def __repr__(self):
         return repr(self.d)
 
-def main():
-    args = parse_args()
+def analyze_json_files(args):
     
     scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro', 'hydro_wind', 'combined']
 
@@ -755,6 +758,37 @@ def main():
     df.to_csv(csv_path, index=False)
 
     print(f"Data for {scenario} appended to {csv_path}")
+
+# =============== ============== ===============
+# ============= CSV FILES ANALYSIS =============
+# =============== ============== ===============
+
+def analyze_csv_files(args):
+    results_dir = 'scripts/results/'
+    csv_files = [f for f in os.listdir(results_dir) if f.endswith('.csv')]
+
+    for csv_file in csv_files:
+        # Extract the time horizon from the file name using regex
+        match = re.search(r'scenario_analysis_results_(\d+).csv', csv_file)
+        if match:
+            time_horizon = match.group(1)
+            print(f"Analyzing CSV file: {csv_file} with time horizon: {time_horizon}")
+            
+            # Load the CSV file for analysis
+            df = pd.read_csv(os.path.join(results_dir, csv_file))
+
+            
+# =============== ============== ===============
+# ==================== MAIN ====================
+# =============== ============== ===============
+
+def main():
+    args = parse_args()
+
+    if args.mode == 'analyze_json':
+        analyze_json_files(args)
+    elif args.mode == 'analyze_csv':
+        analyze_csv_files(args)
 
 if __name__ == "__main__":
     main()
