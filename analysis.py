@@ -32,61 +32,63 @@ def plot_balance(ax, data, title):
     ax.set_ylim(ylim)
     ax.set_title(title)
 
-def extract_base_scenario(scenario):
-    if '_stdwacc' in scenario:
-        return scenario.split('_stdwacc')[0]
-    elif '_varwacc' in scenario:
-        return scenario.split('_varwacc')[0]
-    return scenario
-
-def compute_and_plot_balances(scenario, d, results_path, timehorizon):
+def compute_and_plot_balances(scenario, d, results_path, timehorizon, wacc_label):
     fig, axs = plt.subplots(nrows=3, ncols=3, figsize=(18, 15), constrained_layout=True)
     axs = axs.flatten()  # Ensuring axs is a 1D array for easy indexing
     
-    # Generalized approach to handle variations in power_balance_gr
+    # Generalized approach to handle variations in power_balance_rreh
     power_balances = {
-        'wind_offshore': lambda d: np.array(d.solution.elements.OFF_WIND_PLANTS_GR.variables.electricity.values),
-        'wind_onshore': lambda d: np.array(d.solution.elements.ON_WIND_PLANTS_GR.variables.electricity.values),
-        'hydro': lambda d: np.array(d.solution.elements.HYDRO_PLANT_03h_GR.variables.electricity.values) +
-                           np.array(d.solution.elements.HYDRO_PLANT_03j_GR.variables.electricity.values) +
-                           np.array(d.solution.elements.HYDRO_PLANT_05h_GR.variables.electricity.values),
-        'wave': lambda d: np.array(d.solution.elements.WAVE_PLANT_GR.variables.electricity.values),
-        'combined': lambda d: np.array(d.solution.elements.OFF_WIND_PLANTS_GR.variables.electricity.values) +
-                              np.array(d.solution.elements.ON_WIND_PLANTS_GR.variables.electricity.values) +
-                              np.array(d.solution.elements.HYDRO_PLANT_03h_GR.variables.electricity.values) +
-                              np.array(d.solution.elements.HYDRO_PLANT_03j_GR.variables.electricity.values) +
-                              np.array(d.solution.elements.HYDRO_PLANT_05h_GR.variables.electricity.values) + 
-                              np.array(d.solution.elements.WAVE_PLANT_GR.variables.electricity.values)
+        'wind_offshore': lambda d: np.array(d.solution.elements.OFF_WIND_PLANTS_RREH.variables.electricity.values),
+        'wind_onshore': lambda d: np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.electricity.values),
+        'hydro': lambda d: np.array(d.solution.elements.HYDRO_PLANT_03h_RREH.variables.electricity.values) +
+                           np.array(d.solution.elements.HYDRO_PLANT_03j_RREH.variables.electricity.values) +
+                           np.array(d.solution.elements.HYDRO_PLANT_05h_RREH.variables.electricity.values),
+        'wave': lambda d: np.array(d.solution.elements.WAVE_PLANT_RREH.variables.electricity.values),
+        'hydro_wind': lambda d: np.array(d.solution.elements.OFF_WIND_PLANTS_RREH.variables.electricity.values) +
+                        np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.electricity.values) +
+                        np.array(d.solution.elements.HYDRO_PLANT_03h_RREH.variables.electricity.values) +
+                        np.array(d.solution.elements.HYDRO_PLANT_03j_RREH.variables.electricity.values) +
+                        np.array(d.solution.elements.HYDRO_PLANT_05h_RREH.variables.electricity.values), 
+        'combined': lambda d: np.array(d.solution.elements.OFF_WIND_PLANTS_RREH.variables.electricity.values) +
+                              np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.electricity.values) +
+                              np.array(d.solution.elements.HYDRO_PLANT_03h_RREH.variables.electricity.values) +
+                              np.array(d.solution.elements.HYDRO_PLANT_03j_RREH.variables.electricity.values) +
+                              np.array(d.solution.elements.HYDRO_PLANT_05h_RREH.variables.electricity.values) + 
+                              np.array(d.solution.elements.WAVE_PLANT_RREH.variables.electricity.values),
+        'spain': lambda d: np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.electricity.values) +
+                    np.array(d.solution.elements.SOLAR_PV_PLANTS_RREH.variables.electricity.values),
+        'algeria': lambda d: np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.electricity.values) +
+                    np.array(d.solution.elements.SOLAR_PV_PLANTS_RREH.variables.electricity.values),
+        'germany': lambda d: np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.electricity.values) +
+                    np.array(d.solution.elements.SOLAR_PV_PLANTS_RREH.variables.electricity.values)
     }
 
-    battery_storage_gr_out = np.array(d.solution.elements.BATTERY_STORAGE_GR.variables.electricity_out.values)
-    battery_storage_gr_in = np.array(d.solution.elements.BATTERY_STORAGE_GR.variables.electricity_in.values)
-    hvdc_gr_in = np.array(d.solution.elements.HVDC_GR.variables.electricity_in.values)
-
-    base_scenario = extract_base_scenario(scenario)
+    battery_storage_rreh_out = np.array(d.solution.elements.BATTERY_STORAGE_RREH.variables.electricity_out.values)
+    battery_storage_rreh_in = np.array(d.solution.elements.BATTERY_STORAGE_RREH.variables.electricity_in.values)
+    hvdc_rreh_in = np.array(d.solution.elements.HVDC_RREH.variables.electricity_in.values)
 
     # Compute and plot power balance for the scenario
-    if base_scenario in power_balances:
-        power_balance_gr = power_balances[base_scenario](d) + battery_storage_gr_out - battery_storage_gr_in - hvdc_gr_in
-        plot_balance(axs[0], power_balance_gr, f'{scenario} GR_Inland Power Balance')
+    if scenario in power_balances:
+        power_balance_rreh = power_balances[scenario](d) + battery_storage_rreh_out - battery_storage_rreh_in - hvdc_rreh_in
+        plot_balance(axs[0], power_balance_rreh, f'{scenario} RREH_Inland Power Balance')
 
-    # GR_CO2 Balance
-    co2_storage_gr_in = np.array(d.solution.elements.CARBON_DIOXIDE_STORAGE_GR.variables.carbon_dioxide_in.values)
-    co2_storage_gr_out = np.array(d.solution.elements.CARBON_DIOXIDE_STORAGE_GR.variables.carbon_dioxide_out.values)
-    dac_gr = np.array(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_GR.variables.carbon_dioxide.values)
-    methanation_gr = np.array(d.solution.elements.METHANATION_PLANTS_GR.variables.carbon_dioxide.values)
-    co2_balance_gr = dac_gr + co2_storage_gr_out - co2_storage_gr_in - methanation_gr
+    # RREH_CO2 Balance
+    co2_storage_rreh_in = np.array(d.solution.elements.CARBON_DIOXIDE_STORAGE_RREH.variables.carbon_dioxide_in.values)
+    co2_storage_rreh_out = np.array(d.solution.elements.CARBON_DIOXIDE_STORAGE_RREH.variables.carbon_dioxide_out.values)
+    dac_rreh = np.array(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_RREH.variables.carbon_dioxide.values)
+    methanation_rreh = np.array(d.solution.elements.METHANATION_PLANTS_RREH.variables.carbon_dioxide.values)
+    co2_balance_rreh = dac_rreh + co2_storage_rreh_out - co2_storage_rreh_in - methanation_rreh
 
-    plot_balance(axs[1], co2_balance_gr, 'GR_CO2 Balance')
+    plot_balance(axs[1], co2_balance_rreh, 'RREH_CO2 Balance')
 
-    # GR_LCH4 Balance
-    lch4_carriers_gr = np.array(d.solution.elements.LIQUEFIED_METHANE_CARRIERS_GR.variables.liquefied_methane_in.values)
-    lch4_storage_gr_in = np.array(d.solution.elements.LIQUEFIED_METHANE_STORAGE_HUB_GR.variables.liquefied_methane_in.values)
-    lch4_storage_gr_out = np.array(d.solution.elements.LIQUEFIED_METHANE_STORAGE_HUB_GR.variables.liquefied_methane_out.values)
-    ch4_liquefaction_gr = np.array(d.solution.elements.METHANE_LIQUEFACTION_PLANTS_GR.variables.liquefied_methane.values)
-    lch4_balance_gr = ch4_liquefaction_gr + lch4_storage_gr_out - lch4_storage_gr_in - lch4_carriers_gr
+    # RREH_LCH4 Balance
+    lch4_carriers_rreh = np.array(d.solution.elements.LIQUEFIED_METHANE_CARRIERS_RREH.variables.liquefied_methane_in.values)
+    lch4_storage_rreh_in = np.array(d.solution.elements.LIQUEFIED_METHANE_STORAGE_HUB_RREH.variables.liquefied_methane_in.values)
+    lch4_storage_rreh_out = np.array(d.solution.elements.LIQUEFIED_METHANE_STORAGE_HUB_RREH.variables.liquefied_methane_out.values)
+    ch4_liquefaction_rreh = np.array(d.solution.elements.METHANE_LIQUEFACTION_PLANTS_RREH.variables.liquefied_methane.values)
+    lch4_balance_rreh = ch4_liquefaction_rreh + lch4_storage_rreh_out - lch4_storage_rreh_in - lch4_carriers_rreh
 
-    plot_balance(axs[2], lch4_balance_gr, 'GR_LCH4 Balance')
+    plot_balance(axs[2], lch4_balance_rreh, 'RREH_LCH4 Balance')
 
     # Check BE_CH4 Balance
     conversion_factor = d.model.hyperedges.DESTINATION_METHANE_BALANCE.parameters.conversion_factor
@@ -97,56 +99,56 @@ def compute_and_plot_balances(scenario, d, results_path, timehorizon):
     plot_balance(axs[3], ch4_balance_be, 'BE_CH4 Balance')
 
     # Check BE_LCH4 Balance
-    lch4_carriers_gr = np.array(d.solution.elements.LIQUEFIED_METHANE_CARRIERS_GR.variables.liquefied_methane_out.values)
+    lch4_carriers_rreh = np.array(d.solution.elements.LIQUEFIED_METHANE_CARRIERS_RREH.variables.liquefied_methane_out.values)
     lch4_storage_dest_in = np.array(d.solution.elements.LIQUEFIED_METHANE_STORAGE_DESTINATION.variables.liquefied_methane_in.values)
     lch4_storage_dest_out = np.array(d.solution.elements.LIQUEFIED_METHANE_STORAGE_DESTINATION.variables.liquefied_methane_out.values)
     lch4_regasification_be = np.array(d.solution.elements.LIQUEFIED_METHANE_REGASIFICATION.variables.liquefied_methane.values)
-    lch4_balance_be = lch4_carriers_gr + lch4_storage_dest_out - lch4_storage_dest_in - lch4_regasification_be
+    lch4_balance_be = lch4_carriers_rreh + lch4_storage_dest_out - lch4_storage_dest_in - lch4_regasification_be
 
     plot_balance(axs[4], lch4_balance_be, 'BE_LCH4 Balance')
 
-    # Check GR_Coastal Power Balance
-    hvdc_gr_out = np.array(d.solution.elements.HVDC_GR.variables.electricity_out.values)
-    electrolysis_gr = np.array(d.solution.elements.ELECTROLYSIS_PLANTS_GR.variables.electricity.values)
-    h2_storage_gr = np.array(d.solution.elements.HYDROGEN_STORAGE_GR.variables.electricity.values)
-    desalination_gr = np.array(d.solution.elements.DESALINATION_PLANTS_GR.variables.electricity.values)
-    h2o_storage_gr = np.array(d.solution.elements.WATER_STORAGE_GR.variables.electricity.values)
-    co2_storage_gr = np.array(d.solution.elements.CARBON_DIOXIDE_STORAGE_GR.variables.electricity.values)
-    ch4_liquefaction_gr = np.array(d.solution.elements.METHANE_LIQUEFACTION_PLANTS_GR.variables.electricity.values)
-    dac_gr = np.array(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_GR.variables.electricity.values)
-    power_balance_coast_gr = hvdc_gr_out - electrolysis_gr - h2_storage_gr - desalination_gr - h2o_storage_gr - co2_storage_gr - ch4_liquefaction_gr - dac_gr 
+    # Check RREH_Coastal Power Balance
+    hvdc_rreh_out = np.array(d.solution.elements.HVDC_RREH.variables.electricity_out.values)
+    electrolysis_rreh = np.array(d.solution.elements.ELECTROLYSIS_PLANTS_RREH.variables.electricity.values)
+    h2_storage_rreh = np.array(d.solution.elements.HYDROGEN_STORAGE_RREH.variables.electricity.values)
+    desalination_rreh = np.array(d.solution.elements.DESALINATION_PLANTS_RREH.variables.electricity.values)
+    h2o_storage_rreh = np.array(d.solution.elements.WATER_STORAGE_RREH.variables.electricity.values)
+    co2_storage_rreh = np.array(d.solution.elements.CARBON_DIOXIDE_STORAGE_RREH.variables.electricity.values)
+    ch4_liquefaction_rreh = np.array(d.solution.elements.METHANE_LIQUEFACTION_PLANTS_RREH.variables.electricity.values)
+    dac_rreh = np.array(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_RREH.variables.electricity.values)
+    power_balance_coast_rreh = hvdc_rreh_out - electrolysis_rreh - h2_storage_rreh - desalination_rreh - h2o_storage_rreh - co2_storage_rreh - ch4_liquefaction_rreh - dac_rreh 
 
-    plot_balance(axs[5], power_balance_coast_gr, 'GR_Coastal Power Balance')
+    plot_balance(axs[5], power_balance_coast_rreh, 'RREH_Coastal Power Balance')
 
-    # Check GR_Coastal H2 Balance
-    electrolysis_gr = np.array(d.solution.elements.ELECTROLYSIS_PLANTS_GR.variables.hydrogen.values)
-    h2_storage_gr_out = np.array(d.solution.elements.HYDROGEN_STORAGE_GR.variables.hydrogen_out.values)
-    h2_storage_gr_in = np.array(d.solution.elements.HYDROGEN_STORAGE_GR.variables.hydrogen_in.values)
-    methanation_gr = np.array(d.solution.elements.METHANATION_PLANTS_GR.variables.hydrogen.values)
-    dac_gr = np.array(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_GR.variables.hydrogen.values)
-    h2_balance_gr = electrolysis_gr + h2_storage_gr_out - h2_storage_gr_in - methanation_gr - dac_gr
+    # Check RREH_Coastal H2 Balance
+    electrolysis_rreh = np.array(d.solution.elements.ELECTROLYSIS_PLANTS_RREH.variables.hydrogen.values)
+    h2_storage_rreh_out = np.array(d.solution.elements.HYDROGEN_STORAGE_RREH.variables.hydrogen_out.values)
+    h2_storage_rreh_in = np.array(d.solution.elements.HYDROGEN_STORAGE_RREH.variables.hydrogen_in.values)
+    methanation_rreh = np.array(d.solution.elements.METHANATION_PLANTS_RREH.variables.hydrogen.values)
+    dac_rreh = np.array(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_RREH.variables.hydrogen.values)
+    h2_balance_rreh = electrolysis_rreh + h2_storage_rreh_out - h2_storage_rreh_in - methanation_rreh - dac_rreh
 
-    plot_balance(axs[6], h2_balance_gr, 'GR_Coastal H2 Balance')
+    plot_balance(axs[6], h2_balance_rreh, 'RREH_Coastal H2 Balance')
 
-    # Check GR_Coastal H2O Balance
-    desalination_gr = np.array(d.solution.elements.DESALINATION_PLANTS_GR.variables.water.values)
-    methanation_gr = np.array(d.solution.elements.METHANATION_PLANTS_GR.variables.water.values)
-    h2o_storage_gr_out = np.array(d.solution.elements.WATER_STORAGE_GR.variables.water_out.values)
-    h2o_storage_gr_in = np.array(d.solution.elements.WATER_STORAGE_GR.variables.water_in.values)
-    electrolysis_gr = np.array(d.solution.elements.ELECTROLYSIS_PLANTS_GR.variables.water.values)
-    dac_gr = np.array(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_GR.variables.water.values)
-    h20_balance_gr = desalination_gr + methanation_gr + h2o_storage_gr_out - h2o_storage_gr_in - electrolysis_gr - dac_gr
+    # Check RREH_Coastal H2O Balance
+    desalination_rreh = np.array(d.solution.elements.DESALINATION_PLANTS_RREH.variables.water.values)
+    methanation_rreh = np.array(d.solution.elements.METHANATION_PLANTS_RREH.variables.water.values)
+    h2o_storage_rreh_out = np.array(d.solution.elements.WATER_STORAGE_RREH.variables.water_out.values)
+    h2o_storage_rreh_in = np.array(d.solution.elements.WATER_STORAGE_RREH.variables.water_in.values)
+    electrolysis_rreh = np.array(d.solution.elements.ELECTROLYSIS_PLANTS_RREH.variables.water.values)
+    dac_rreh = np.array(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_RREH.variables.water.values)
+    h20_balance_rreh = desalination_rreh + methanation_rreh + h2o_storage_rreh_out - h2o_storage_rreh_in - electrolysis_rreh - dac_rreh
 
-    plot_balance(axs[7], h20_balance_gr, 'GR_Coastal H2O Balance')
+    plot_balance(axs[7], h20_balance_rreh, 'RREH_Coastal H2O Balance')
 
-    # Check GR_Coastal CH4 Balance
-    methanation_gr = np.array(d.solution.elements.METHANATION_PLANTS_GR.variables.methane.values)
-    ch4_liquefaction_gr = np.array(d.solution.elements.METHANE_LIQUEFACTION_PLANTS_GR.variables.liquefied_methane.values)
-    ch4_balance_gr = methanation_gr - ch4_liquefaction_gr
+    # Check RREH_Coastal CH4 Balance
+    methanation_rreh = np.array(d.solution.elements.METHANATION_PLANTS_RREH.variables.methane.values)
+    ch4_liquefaction_rreh = np.array(d.solution.elements.METHANE_LIQUEFACTION_PLANTS_RREH.variables.liquefied_methane.values)
+    ch4_balance_rreh = methanation_rreh - ch4_liquefaction_rreh
 
-    plot_balance(axs[8], ch4_balance_gr, 'GR_Coastal CH4 Balance')
+    plot_balance(axs[8], ch4_balance_rreh, 'RREH_Coastal CH4 Balance')
     
-    img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
+    img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
     
     # Create the img_{timehorizon} folder inside the results_path if it doesn't exist
     img_folder_path = os.path.join(results_path, img_folder_name)
@@ -196,28 +198,28 @@ def filter_nodes(ls_nodes, suffix, exclude_patterns=None):
 def analyze_system_costs(d):
     ls_nodes = list(d.model.nodes.keys())
 
-    excluded_hydro_basins = [node for node in ls_nodes if re.match(r'HYDRO_BASIN_[\w]+_GR$', node)]
-    GR_nodes = filter_nodes(ls_nodes, "_GR", exclude_patterns=excluded_hydro_basins + ["PCCC", "PROD_CO2", "CO2_EXPORT"])
+    excluded_hydro_basins = [node for node in ls_nodes if re.match(r'HYDRO_BASIN_[\w]+_RREH$', node)]
+    RREH_nodes = filter_nodes(ls_nodes, "_RREH", exclude_patterns=excluded_hydro_basins + ["PCCC", "PROD_CO2", "CO2_EXPORT"])
     BE_nodes = filter_nodes(ls_nodes, "_BE", exclude_patterns=["PROD_CO2", "ENERGY_DEMAND_BE"]) + ["LIQUEFIED_METHANE_STORAGE_DESTINATION", "LIQUEFIED_METHANE_REGASIFICATION"]
 
-    cost_GR = cost_rreh(d, GR_nodes)
+    cost_RREH = cost_rreh(d, RREH_nodes)
     cost_BE = cost_rreh(d, BE_nodes)
 
     obj_cost = d.solution.objective
-    tot_cost = cost_GR + cost_BE
+    tot_cost = cost_RREH + cost_BE
     abs_diff = np.abs(obj_cost - tot_cost)
 
-    print(f"GR cost: {cost_GR}")
+    print(f"RREH cost: {cost_RREH}")
     print(f"BE cost: {cost_BE}")
     print(f"Objective cost: {obj_cost}")
     print(f"Total computed cost: {tot_cost}")
     print(f"Cost difference is within tolerance: {abs_diff < 0.1}")
 
-    return GR_nodes, BE_nodes, cost_GR, cost_BE, tot_cost
+    return RREH_nodes, BE_nodes, cost_RREH, cost_BE, tot_cost
 
-def analyze_and_plot_capacities(scenario, d, results_path, timehorizon, report=False):
+def analyze_and_plot_capacities(scenario, d, results_path, timehorizon, wacc_label, report=False):
     plant_capacities = calculate_plant_capacities(d)
-    plot_and_save_capacities(plant_capacities, scenario, results_path, timehorizon, report)
+    plot_and_save_capacities(plant_capacities, scenario, results_path, timehorizon, report, wacc_label)
     
     return plant_capacities
 
@@ -225,40 +227,40 @@ def calculate_plant_capacities(d):
     plant_capacities = {}
 
     # Dynamically calculate capacities based on available data in 'd'
-    if hasattr(d.solution.elements, "ON_WIND_PLANTS_GR"):
-        plant_capacities['wind_onshore_gr'] = np.sum(d.solution.elements.ON_WIND_PLANTS_GR.variables.capacity.values)
-    if hasattr(d.solution.elements, "OFF_WIND_PLANTS_GR"):
-        plant_capacities['wind_offshore_gr'] = np.sum(d.solution.elements.OFF_WIND_PLANTS_GR.variables.capacity.values)
-    if hasattr(d.solution.elements, "WAVE_PLANT_GR"):
-        wave_units = d.solution.elements.WAVE_PLANT_GR.variables.num_units.values[0]
-        wave_rp = d.model.nodes.WAVE_PLANT_GR.parameters.unit_rated_power[0]
-        plant_capacities['wave_gr'] = wave_units * wave_rp
+    if hasattr(d.solution.elements, "ON_WIND_PLANTS_RREH"):
+        plant_capacities['wind_onshore_rreh'] = np.sum(d.solution.elements.ON_WIND_PLANTS_RREH.variables.capacity.values)
+    if hasattr(d.solution.elements, "OFF_WIND_PLANTS_RREH"):
+        plant_capacities['wind_offshore_rreh'] = np.sum(d.solution.elements.OFF_WIND_PLANTS_RREH.variables.capacity.values)
+    if hasattr(d.solution.elements, "WAVE_PLANT_RREH"):
+        wave_units = d.solution.elements.WAVE_PLANT_RREH.variables.num_units.values[0]
+        wave_rp = d.model.nodes.WAVE_PLANT_RREH.parameters.unit_rated_power[0]
+        plant_capacities['wave_rreh'] = wave_units * wave_rp
 
     # Adding hydro plant capacities
     ls_nodes = list(d.model.nodes.keys())
     for element_name in ls_nodes:
-        if re.match(r'HYDRO_PLANT_\w+_GR$', element_name):
+        if re.match(r'HYDRO_PLANT_\w+_RREH$', element_name):
             element = getattr(d.solution.elements, element_name, None)
             if element is not None and hasattr(element, 'variables'):
                 capacity_values = element.variables.capacity.values
                 if capacity_values:
                     plant_capacities[element_name] = np.sum(capacity_values)
 
-    plant_capacities['battery_flow'] = np.sum(d.solution.elements.BATTERY_STORAGE_GR.variables.capacity_flow.values)
-    plant_capacities['battery_stock'] = np.sum(d.solution.elements.BATTERY_STORAGE_GR.variables.capacity_stock.values)
+    plant_capacities['battery_flow'] = np.sum(d.solution.elements.BATTERY_STORAGE_RREH.variables.capacity_flow.values)
+    plant_capacities['battery_stock'] = np.sum(d.solution.elements.BATTERY_STORAGE_RREH.variables.capacity_stock.values)
 
     return plant_capacities
 
-def plot_and_save_capacities(capacities, scenario, results_path, timehorizon, report):
+def plot_and_save_capacities(capacities, scenario, results_path, timehorizon, report, wacc_label):
     # Calculate total hydro capacity and prepare other categories and their capacities
     hydro_keys = [k for k in capacities if "HYDRO_PLANT" in k]
     total_hydro_capacity = sum(capacities[k] for k in hydro_keys)
     
     categories = ['Onshore Wind', 'Offshore Wind', 'Wave', 'Battery Flow', 'Battery Stock']
     capacity_values = [
-        capacities.get('wind_onshore_gr', 0),
-        capacities.get('wind_offshore_gr', 0),
-        capacities.get('wave_gr', 0),
+        capacities.get('wind_onshore_rreh', 0),
+        capacities.get('wind_offshore_rreh', 0),
+        capacities.get('wave_rreh', 0),
         capacities.get('battery_flow', 0),
         capacities.get('battery_stock', 0),
     ]
@@ -290,7 +292,7 @@ def plot_and_save_capacities(capacities, scenario, results_path, timehorizon, re
                     ha='center', va='bottom')
 
     # Save the general capacities plot
-    img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
+    img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
     if not os.path.exists(img_folder_path):
         os.makedirs(img_folder_path)
@@ -370,7 +372,7 @@ def cost_rreh_detailed(d, ls):
     
     return detailed_cost
 
-def plot_cost_breakdown(detailed_costs, demand_in_mwh, title, results_path, scenario, timehorizon, source='GR', report=False):
+def plot_cost_breakdown(detailed_costs, demand_in_mwh, title, results_path, scenario, timehorizon, wacc_label, source='RREH', report=False):
     # Convert costs to €/MWh
     adjusted_costs = {node: cost * 1e6 / demand_in_mwh for node, cost in detailed_costs.items()}
 
@@ -397,7 +399,7 @@ def plot_cost_breakdown(detailed_costs, demand_in_mwh, title, results_path, scen
     plt.tight_layout()  # Adjust layout
 
     # Save the cost breakdown plot
-    img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
+    img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
     if not os.path.exists(img_folder_path):
         os.makedirs(img_folder_path)
@@ -406,27 +408,27 @@ def plot_cost_breakdown(detailed_costs, demand_in_mwh, title, results_path, scen
         ax.set_title('')
         if source == 'BE':
             cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_BE.pdf")
-        else:  # Default to 'GR' if not specified or for any other value
-            cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_GR.pdf")
+        else:  # Default to 'RREH' if not specified or for any other value
+            cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_RREH.pdf")
     else:
         ax.set_title(title)
         if source == 'BE':
             cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_BE.png")
-        else:  # Default to 'GR' if not specified or for any other value
-            cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_GR.png")        
+        else:  # Default to 'RREH' if not specified or for any other value
+            cost_breakdown_fig_path = os.path.join(img_folder_path, f"{scenario}_cost_breakdown_RREH.png")        
     fig.savefig(cost_breakdown_fig_path)
     plt.close(fig)  # Close the plot to release memory
 
-def plot_production_dynamics(d, results_path, scenario, timehorizon, start_date='2015-01-01'):
+def plot_production_dynamics(d, results_path, scenario, timehorizon, wacc_label, start_date='2015-01-01'):
     production_data = {}
 
     # Determine which production types to include based on the scenario
     production_types_mapping = {
-        'combined': ['OFF_WIND_PLANTS_GR', 'ON_WIND_PLANTS_GR', 'HYDRO_PLANT_03h_GR', 'HYDRO_PLANT_03j_GR', 'HYDRO_PLANT_05h_GR', 'WAVE_PLANT_GR'],
-        'wind_onshore': ['ON_WIND_PLANTS_GR'],
-        'wind_offshore': ['OFF_WIND_PLANTS_GR'],
-        'hydro': ['HYDRO_PLANT_03h_GR', 'HYDRO_PLANT_03j_GR', 'HYDRO_PLANT_05h_GR'],
-        'wave': ['WAVE_PLANT_GR']
+        'combined': ['OFF_WIND_PLANTS_RREH', 'ON_WIND_PLANTS_RREH', 'HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH', 'WAVE_PLANT_RREH'],
+        'wind_onshore': ['ON_WIND_PLANTS_RREH'],
+        'wind_offshore': ['OFF_WIND_PLANTS_RREH'],
+        'hydro': ['HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH'],
+        'wave': ['WAVE_PLANT_RREH']
     }
     production_types = production_types_mapping.get(scenario, [])
 
@@ -458,14 +460,14 @@ def plot_production_dynamics(d, results_path, scenario, timehorizon, start_date=
         ax.xaxis.set_major_locator(mdates.MonthLocator())
         ax.set_ylabel('GWh')
 
-    img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
+    img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
     os.makedirs(img_folder_path, exist_ok=True)
     production_fig_path = os.path.join(img_folder_path, f"{scenario}_production_dynamics.png")
     fig.savefig(production_fig_path)
     plt.close(fig)
 
-def plot_basin_dynamics(d, results_path, scenario, timehorizon, start_date='2015-01-01'):
+def plot_basin_dynamics(d, results_path, scenario, timehorizon, wacc_label, start_date='2015-01-01'):
     if scenario not in ['hydro', 'combined']:
         return  # Only proceed if the correct scenario
 
@@ -501,19 +503,19 @@ def plot_basin_dynamics(d, results_path, scenario, timehorizon, start_date='2015
         plt.xlabel('Time')
         fig.tight_layout()
 
-        img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
+        img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
         img_folder_path = os.path.join(results_path, img_folder_name)
         os.makedirs(img_folder_path, exist_ok=True)
         basin_fig_path = os.path.join(img_folder_path, f"{scenario}_{basin_name}_dynamics.png")
         fig.savefig(basin_fig_path)
         plt.close(fig)
 
-def plot_storage_dynamics(d, results_path, scenario, timehorizon, start_date='2015-01-01'):
+def plot_storage_dynamics(d, results_path, scenario, timehorizon, wacc_label, start_date='2015-01-01'):
     date_range = pd.date_range(start=start_date, periods=17544, freq='H')
 
-    battery_data = np.array(d.solution.elements.BATTERY_STORAGE_GR.variables.electricity_stored.values)
-    hydrogen_data = np.array(d.solution.elements.HYDROGEN_STORAGE_GR.variables.hydrogen_stored.values)
-    methane_data_src = np.array(d.solution.elements.LIQUEFIED_METHANE_STORAGE_HUB_GR.variables.liquefied_methane_stored.values)
+    battery_data = np.array(d.solution.elements.BATTERY_STORAGE_RREH.variables.electricity_stored.values)
+    hydrogen_data = np.array(d.solution.elements.HYDROGEN_STORAGE_RREH.variables.hydrogen_stored.values)
+    methane_data_src = np.array(d.solution.elements.LIQUEFIED_METHANE_STORAGE_HUB_RREH.variables.liquefied_methane_stored.values)
     methane_data_dest = np.array(d.solution.elements.LIQUEFIED_METHANE_STORAGE_DESTINATION.variables.liquefied_methane_stored.values)
 
     fig, axs = plt.subplots(4, 1, figsize=(12, 8), sharex=True)
@@ -537,7 +539,7 @@ def plot_storage_dynamics(d, results_path, scenario, timehorizon, start_date='20
 
     fig.tight_layout()
 
-    img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
+    img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
     os.makedirs(img_folder_path, exist_ok=True)
     
@@ -545,22 +547,22 @@ def plot_storage_dynamics(d, results_path, scenario, timehorizon, start_date='20
     fig.savefig(storage_dynamics_fig_path)
     plt.close(fig)
 
-def analyze_and_plot_tech_capacities(scenario, d, results_path, timehorizon, report=False):
+def analyze_and_plot_tech_capacities(scenario, d, results_path, timehorizon, wacc_label, report=False):
     plant_capacities = calculate_plant_tech_capacities(d)
-    plot_and_save_tech_capacities(plant_capacities, scenario, results_path, timehorizon, report)
+    plot_and_save_tech_capacities(plant_capacities, scenario, results_path, timehorizon, wacc_label, report)
     
     return plant_capacities
 
 def calculate_plant_tech_capacities(d):
     plant_capacities = {}
     
-    plant_capacities['electrolysis'] = np.sum(d.solution.elements.ELECTROLYSIS_PLANTS_GR.variables.capacity.values)
-    plant_capacities['dac'] = np.sum(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_GR.variables.capacity.values)
-    plant_capacities['methanation'] = np.sum(d.solution.elements.METHANATION_PLANTS_GR.variables.capacity.values)
+    plant_capacities['electrolysis'] = np.sum(d.solution.elements.ELECTROLYSIS_PLANTS_RREH.variables.capacity.values)
+    plant_capacities['dac'] = np.sum(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_RREH.variables.capacity.values)
+    plant_capacities['methanation'] = np.sum(d.solution.elements.METHANATION_PLANTS_RREH.variables.capacity.values)
 
     return plant_capacities
 
-def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizon, report):
+def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizon, report, wacc_label):
     
     categories = ['Electrolysis ', 'DAC', 'Methanation']
     capacity_values = [
@@ -592,7 +594,7 @@ def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizo
                     ha='center', va='bottom')
 
     # Save the general capacities plot
-    img_folder_name = f"img_{timehorizon}/{scenario}" if timehorizon else "img_all"
+    img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
     if not os.path.exists(img_folder_path):
         os.makedirs(img_folder_path)
@@ -631,7 +633,7 @@ class MakeMeReadable:
 
 def analyze_json_files(args):
     
-    scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro', 'hydro_wind', 'combined']
+    scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro', 'hydro_wind', 'combined', 'spain', 'algeria', 'germany']
 
     base_path = 'models'  # Adjust this path as necessary
 
@@ -645,12 +647,12 @@ def analyze_json_files(args):
     for scenario in scenarios:
         aggregated_data = {
             "scenario": [],
-            "wind_onshore_gr": [],
-            "wind_offshore_gr": [],
-            "wave_gr": [],
-            "hydro_3h_gr": [],
-            "hydro_3j_gr": [],
-            "hydro_5h_gr": [],
+            "wind_onshore_rreh": [],
+            "wind_offshore_rreh": [],
+            "wave_rreh": [],
+            "hydro_3h_rreh": [],
+            "hydro_3j_rreh": [],
+            "hydro_5h_rreh": [],
             "battery_flow": [],
             "battery_stock": [],
             "Electrolysis": [],
@@ -663,24 +665,21 @@ def analyze_json_files(args):
         results_path = os.path.join(base_path, scenario, 'results')
 
         for file_name in os.listdir(results_path):
-            if file_name.endswith('.json'):
-                # Split the filename to extract parts
-                parts = file_name.split('_')
-                # Ensure the filename structure matches expected convention
-                if len(parts) >= 3 and parts[-1] == "results.json":
-                    try:
-                        # Attempt to extract the time horizon part based on the new naming convention
-                        file_timehorizon = int(parts[-2])
-                    except ValueError:
-                        # If the time horizon part cannot be converted to an integer, skip the file
-                        continue
+                if file_name.endswith('.json'):
+                    parts = file_name.split('_')
+                    if parts[-1] == "results.json":
+                        wacc_label = parts[-3]
+                        try:
+                            file_timehorizon = int(parts[-2])
+                        except ValueError:
+                            continue  # Skip if the time horizon cannot be parsed as integer
 
-                    # Check if the extracted time horizon matches the specified one (if any)
-                    if args.timehorizon == file_timehorizon:
-                        # Only proceed with loading and analyzing the data if time horizons match
-                        file_path = os.path.join(results_path, file_name)
-                        print(f"File path: {file_path}")
-                        data = load_results(file_path)
+                        if args.timehorizon == file_timehorizon:
+                            # Reconstruct the scenario name from the parts excluding the last three elements
+                            scenario_name = '_'.join(parts[:-3])
+                            file_path = os.path.join(results_path, file_name)
+                            print(f"File path: {file_path}")
+                            data = load_results(file_path)
                 
                         # Split the filename on the underscores
                         parts = file_name.split('_')
@@ -697,25 +696,25 @@ def analyze_json_files(args):
 
                         # Compute total costs
                         print(f"Computing total costs for {scenario_name} with time horizon {args.timehorizon}")
-                        GR_nodes, BE_nodes, cost_GR, cost_BE, tot_cost = analyze_system_costs(data)
+                        RREH_nodes, BE_nodes, cost_RREH, cost_BE, tot_cost = analyze_system_costs(data)
                         
                         aggregated_data['total cost'].append(tot_cost)
 
                         # Retrieve and plot the installed renewable capacities
                         print(f"Retrieving and plotting installed capacities for {scenario_name} with time horizon {args.timehorizon}")
-                        plant_capacities = analyze_and_plot_capacities(scenario_name, data, results_path, args.timehorizon, args.report)
+                        plant_capacities = analyze_and_plot_capacities(scenario_name, data, results_path, args.timehorizon, wacc_label, args.report)
 
                         # Aggregate plant capacities
                         # Direct mapping for non-hydro capacities
-                        for capacity_type in ["wind_onshore_gr", "wind_offshore_gr", "wave_gr", "battery_flow", "battery_stock"]:
+                        for capacity_type in ["wind_onshore_rreh", "wind_offshore_rreh", "wave_rreh", "battery_flow", "battery_stock"]:
                             aggregated_data[capacity_type].append(plant_capacities.get(capacity_type, "NA"))
 
                         # Handle hydro capacities
                         # Adapt these keys based on how they're actually named in your returned 'plant_capacities'
                         hydro_mappings = {
-                            "HYDRO_PLANT_03h_GR": "hydro_3h_gr",
-                            "HYDRO_PLANT_03j_GR": "hydro_3j_gr",
-                            "HYDRO_PLANT_05h_GR": "hydro_5h_gr",
+                            "HYDRO_PLANT_03h_RREH": "hydro_3h_rreh",
+                            "HYDRO_PLANT_03j_RREH": "hydro_3j_rreh",
+                            "HYDRO_PLANT_05h_RREH": "hydro_5h_rreh",
                         }
                         for original_key, new_key in hydro_mappings.items():
                             # Use 'NA' if not found
@@ -730,24 +729,24 @@ def analyze_json_files(args):
                         
                         # Plot cost breakdown
                         print(f"Plotting the cost breakdown of {scenario_name} with time horizon {args.timehorizon}")                
-                        cost_details_GR = cost_rreh_detailed(data, GR_nodes)
-                        plot_cost_breakdown(cost_details_GR, demand_in_mwh, 'Synthetic Methane (Greenland) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, 'GR' ,args.report)
+                        cost_details_RREH = cost_rreh_detailed(data, RREH_nodes)
+                        plot_cost_breakdown(cost_details_RREH, demand_in_mwh, 'Synthetic Methane (Greenland) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'RREH' ,args.report)
                         cost_details_BE = cost_rreh_detailed(data, BE_nodes)
-                        plot_cost_breakdown(cost_details_BE, demand_in_mwh, 'Synthetic Methane (Belgium) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, 'BE', args.report)
+                        plot_cost_breakdown(cost_details_BE, demand_in_mwh, 'Synthetic Methane (Belgium) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'BE', args.report)
 
                         # Plot energy production dynamic
-                        plot_production_dynamics(data, results_path, scenario_name, args.timehorizon)
+                        plot_production_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
                         
                         # Plot basins dynamic
                         if scenario in ['hydro', 'combined']:
-                            plot_basin_dynamics(data, results_path, scenario_name, args.timehorizon)
+                            plot_basin_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
 
                         # Plot storage dynamic
-                        plot_storage_dynamics(data, results_path, scenario_name, args.timehorizon)
+                        plot_storage_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
 
                         # Retrieve and plot the installed side techs capacities
                         print(f"Retrieving and plotting installed side tech capacities for {scenario_name} with time horizon {args.timehorizon}")
-                        tech_capacities = analyze_and_plot_tech_capacities(scenario_name, data, results_path, args.timehorizon, args.report)
+                        tech_capacities = analyze_and_plot_tech_capacities(scenario_name, data, results_path, args.timehorizon, wacc_label, args.report)
 
                         for tech_type in ["Electrolysis", "DAC", "Methanation"]:
                             aggregated_data[tech_type].append(tech_capacities.get(tech_type.lower().replace(" ", "_"), "NA"))  # Assuming the keys in tech_capacities are lowercase with underscores

@@ -6,7 +6,8 @@
     // global parameters
 
     demand_el = import "..\..\data\demand_el.csv";  // GWh(e) - tertiary, industry, residential and railway electricity demand + electricity heating
-    wacc = 0.0441;
+    //wacc = 0.0441;
+    hydro_wacc = 0.0421;
     number_years_horizon = T/8760; 
     co2_emission_cost = 0; // 80 * 1/(10**3); // M€/kt(co2)
     e_ens_cost = 3; // M€/GWh
@@ -43,11 +44,11 @@
 // Methane Balance Belgium Liquid
 #HYPEREDGE DESTINATION_LIQUEFIED_METHANE_BALANCE
 	#CONSTRAINTS
-	    LIQUEFIED_METHANE_CARRIERS_GR.liquefied_methane_out[t] + LIQUEFIED_METHANE_STORAGE_DESTINATION.liquefied_methane_out[t] == LIQUEFIED_METHANE_STORAGE_DESTINATION.liquefied_methane_in[t] + LIQUEFIED_METHANE_REGASIFICATION.liquefied_methane[t];
+	    LIQUEFIED_METHANE_CARRIERS_RREH.liquefied_methane_out[t] + LIQUEFIED_METHANE_STORAGE_DESTINATION.liquefied_methane_out[t] == LIQUEFIED_METHANE_STORAGE_DESTINATION.liquefied_methane_in[t] + LIQUEFIED_METHANE_REGASIFICATION.liquefied_methane[t];
 
 // REMOTE HUB GROENLAND
 
-#NODE HYDRO_BASIN_03h_GR
+#NODE HYDRO_BASIN_03h_RREH
     #PARAMETERS
         // initial_storage = 35.0 * 1e3; // thousands of cubic meters (TCM), yearly average (GEUS report)
         inflow_series = import "../../data/inflow_series_03h.csv"; // TCM/h, historical inflow data
@@ -71,13 +72,13 @@
 
 #HYPEREDGE BASIN_TO_HYDRO_03h
     #CONSTRAINTS
-    water_balance: HYDRO_BASIN_03h_GR.release[t] == HYDRO_PLANT_03h_GR.release[t];
+    water_balance: HYDRO_BASIN_03h_RREH.release[t] == HYDRO_PLANT_03h_RREH.release[t];
 
-#NODE HYDRO_PLANT_03h_GR
+#NODE HYDRO_PLANT_03h_RREH
     #PARAMETERS // for >= 50MW
         full_capex = 1713; // in MEur/GW --> source = IRENA 2000-2021
         lifetime = 100.0;
-        annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+        annualised_capex = full_capex * global.hydro_wacc * (1 + global.hydro_wacc)**lifetime / ((1 + global.hydro_wacc)**lifetime - 1); // MEur
         fom = 40; // MEur/year
         vom = 0.003; // MEur/GWh
         efficiency = 0.87;
@@ -97,7 +98,7 @@
         min: vom * electricity[t];
 
 
-#NODE HYDRO_BASIN_03j_GR
+#NODE HYDRO_BASIN_03j_RREH
     #PARAMETERS
         // initial_storage = 35.0 * 1e3; // TCM, yearly average (GEUS report)
         inflow_series = import "../../data/inflow_series_03j.csv"; // TCM/h, historical inflow data
@@ -123,13 +124,13 @@
 
 #HYPEREDGE BASIN_TO_HYDRO_03j
     #CONSTRAINTS
-        water_balance: HYDRO_BASIN_03j_GR.release[t] == HYDRO_PLANT_03j_GR.release[t];
+        water_balance: HYDRO_BASIN_03j_RREH.release[t] == HYDRO_PLANT_03j_RREH.release[t];
 
-#NODE HYDRO_PLANT_03j_GR
+#NODE HYDRO_PLANT_03j_RREH
     #PARAMETERS // for >= 50MW
         full_capex = 1713; // in MEur/GW --> source = IRENA 2000-2021
         lifetime = 100.0;
-        annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+        annualised_capex = full_capex * global.hydro_wacc * (1 + global.hydro_wacc)**lifetime / ((1 + global.hydro_wacc)**lifetime - 1); // MEur
         fom = 40; // MEur/year
         vom = 0.003; // MEur/GWh
         efficiency = 0.87;
@@ -149,7 +150,7 @@
         min: vom * electricity[t];
 
 
-#NODE HYDRO_BASIN_05h_GR
+#NODE HYDRO_BASIN_05h_RREH
     #PARAMETERS
         // initial_storage = 35.0 * 1e3; // TCM * 1e6 = m³, yearly average (GEUS report)
         inflow_series = import "../../data/inflow_series_05h.csv"; // TCM/h, historical inflow data
@@ -174,13 +175,13 @@
 
 #HYPEREDGE BASIN_TO_HYDRO_05h
     #CONSTRAINTS
-        water_balance: HYDRO_BASIN_05h_GR.release[t] == HYDRO_PLANT_05h_GR.release[t];
+        water_balance: HYDRO_BASIN_05h_RREH.release[t] == HYDRO_PLANT_05h_RREH.release[t];
 
-#NODE HYDRO_PLANT_05h_GR
+#NODE HYDRO_PLANT_05h_RREH
     #PARAMETERS // for >= 50MW
         full_capex = 1713; // in MEur/GW --> source = IRENA 2000-2021
         lifetime = 100.0;
-        annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+        annualised_capex = full_capex * global.hydro_wacc * (1 + global.hydro_wacc)**lifetime / ((1 + global.hydro_wacc)**lifetime - 1); // MEur
         fom = 40; // MEur/year
         vom = 0.003; // MEur/GWh
         efficiency = 0.87;
@@ -199,44 +200,44 @@
         min: global.number_years_horizon * (annualised_capex + fom) * capacity;
         min: vom * electricity[t];
         
-#NODE BATTERY_STORAGE_GR = import BATTERY_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
-#NODE HVDC_GR = import HVDC from "..\..\templates\remote_hub_wacc.gboml" with full_capex_lines = 0.25*100;
-#NODE ELECTROLYSIS_PLANTS_GR = import ELECTROLYSIS_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
-#NODE DESALINATION_PLANTS_GR = import DESALINATION_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
-#NODE DIRECT_AIR_CAPTURE_PLANTS_GR = import DIRECT_AIR_CAPTURE_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
-#NODE HYDROGEN_STORAGE_GR = import HYDROGEN_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
-#NODE CARBON_DIOXIDE_STORAGE_GR = import CARBON_DIOXIDE_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
-#NODE WATER_STORAGE_GR = import WATER_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
-#NODE METHANATION_PLANTS_GR = import METHANATION_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
-#NODE METHANE_LIQUEFACTION_PLANTS_GR = import METHANE_LIQUEFACTION_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
-#NODE LIQUEFIED_METHANE_STORAGE_HUB_GR = import LIQUEFIED_METHANE_STORAGE_HUB from "..\..\templates\remote_hub_wacc.gboml";
-#NODE LIQUEFIED_METHANE_CARRIERS_GR = import LIQUEFIED_METHANE_CARRIERS from "..\..\templates\remote_hub_wacc.gboml";
-#HYPEREDGE INLAND_POWER_BALANCE_GR
+#NODE BATTERY_STORAGE_RREH = import BATTERY_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
+#NODE HVDC_RREH = import HVDC from "..\..\templates\remote_hub_wacc.gboml" with full_capex_lines = 0.25*100;
+#NODE ELECTROLYSIS_PLANTS_RREH = import ELECTROLYSIS_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
+#NODE DESALINATION_PLANTS_RREH = import DESALINATION_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
+#NODE DIRECT_AIR_CAPTURE_PLANTS_RREH = import DIRECT_AIR_CAPTURE_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
+#NODE HYDROGEN_STORAGE_RREH = import HYDROGEN_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
+#NODE CARBON_DIOXIDE_STORAGE_RREH = import CARBON_DIOXIDE_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
+#NODE WATER_STORAGE_RREH = import WATER_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
+#NODE METHANATION_PLANTS_RREH = import METHANATION_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
+#NODE METHANE_LIQUEFACTION_PLANTS_RREH = import METHANE_LIQUEFACTION_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
+#NODE LIQUEFIED_METHANE_STORAGE_HUB_RREH = import LIQUEFIED_METHANE_STORAGE_HUB from "..\..\templates\remote_hub_wacc.gboml";
+#NODE LIQUEFIED_METHANE_CARRIERS_RREH = import LIQUEFIED_METHANE_CARRIERS from "..\..\templates\remote_hub_wacc.gboml";
+#HYPEREDGE INLAND_POWER_BALANCE_RREH
     #CONSTRAINTS
-        inland_power_balance_gr: HYDRO_PLANT_03j_GR.electricity[t] + HYDRO_PLANT_05h_GR.electricity[t] + BATTERY_STORAGE_GR.electricity_out[t] == BATTERY_STORAGE_GR.electricity_in[t] + HVDC_GR.electricity_in[t];
+        inland_power_balance_gr: HYDRO_PLANT_03j_RREH.electricity[t] + HYDRO_PLANT_05h_RREH.electricity[t] + BATTERY_STORAGE_RREH.electricity_out[t] == BATTERY_STORAGE_RREH.electricity_in[t] + HVDC_RREH.electricity_in[t];
 
-#HYPEREDGE COASTAL_POWER_BALANCE_GR
+#HYPEREDGE COASTAL_POWER_BALANCE_RREH
     #CONSTRAINTS
-        HVDC_GR.electricity_out[t] == ELECTROLYSIS_PLANTS_GR.electricity[t] + HYDROGEN_STORAGE_GR.electricity[t] + DESALINATION_PLANTS_GR.electricity[t] + WATER_STORAGE_GR.electricity[t] + DIRECT_AIR_CAPTURE_PLANTS_GR.electricity[t] + CARBON_DIOXIDE_STORAGE_GR.electricity[t] + METHANE_LIQUEFACTION_PLANTS_GR.electricity[t];
+        HVDC_RREH.electricity_out[t] == ELECTROLYSIS_PLANTS_RREH.electricity[t] + HYDROGEN_STORAGE_RREH.electricity[t] + DESALINATION_PLANTS_RREH.electricity[t] + WATER_STORAGE_RREH.electricity[t] + DIRECT_AIR_CAPTURE_PLANTS_RREH.electricity[t] + CARBON_DIOXIDE_STORAGE_RREH.electricity[t] + METHANE_LIQUEFACTION_PLANTS_RREH.electricity[t];
 
-#HYPEREDGE COASTAL_HYDROGEN_BALANCE_GR
+#HYPEREDGE COASTAL_HYDROGEN_BALANCE_RREH
     #CONSTRAINTS
-        ELECTROLYSIS_PLANTS_GR.hydrogen[t] + HYDROGEN_STORAGE_GR.hydrogen_out[t] == HYDROGEN_STORAGE_GR.hydrogen_in[t] + DIRECT_AIR_CAPTURE_PLANTS_GR.hydrogen[t] + METHANATION_PLANTS_GR.hydrogen[t];
+        ELECTROLYSIS_PLANTS_RREH.hydrogen[t] + HYDROGEN_STORAGE_RREH.hydrogen_out[t] == HYDROGEN_STORAGE_RREH.hydrogen_in[t] + DIRECT_AIR_CAPTURE_PLANTS_RREH.hydrogen[t] + METHANATION_PLANTS_RREH.hydrogen[t];
 
-#HYPEREDGE COASTAL_WATER_BALANCE_GR
+#HYPEREDGE COASTAL_WATER_BALANCE_RREH
     #CONSTRAINTS
-        DESALINATION_PLANTS_GR.water[t] + METHANATION_PLANTS_GR.water[t] + WATER_STORAGE_GR.water_out[t] == WATER_STORAGE_GR.water_in[t] + ELECTROLYSIS_PLANTS_GR.water[t] + DIRECT_AIR_CAPTURE_PLANTS_GR.water[t];
+        DESALINATION_PLANTS_RREH.water[t] + METHANATION_PLANTS_RREH.water[t] + WATER_STORAGE_RREH.water_out[t] == WATER_STORAGE_RREH.water_in[t] + ELECTROLYSIS_PLANTS_RREH.water[t] + DIRECT_AIR_CAPTURE_PLANTS_RREH.water[t];
 
 
-#HYPEREDGE COASTAL_METHANE_BALANCE_GR
+#HYPEREDGE COASTAL_METHANE_BALANCE_RREH
     #CONSTRAINTS
-        METHANATION_PLANTS_GR.methane[t] == METHANE_LIQUEFACTION_PLANTS_GR.methane[t];
+        METHANATION_PLANTS_RREH.methane[t] == METHANE_LIQUEFACTION_PLANTS_RREH.methane[t];
 
 
-#HYPEREDGE COASTAL_LIQUEFIED_METHANE_BALANCE_GR
+#HYPEREDGE COASTAL_LIQUEFIED_METHANE_BALANCE_RREH
     #CONSTRAINTS
-        liquefied_methane_balance: METHANE_LIQUEFACTION_PLANTS_GR.liquefied_methane[t] + LIQUEFIED_METHANE_STORAGE_HUB_GR.liquefied_methane_out[t] == LIQUEFIED_METHANE_STORAGE_HUB_GR.liquefied_methane_in[t] + LIQUEFIED_METHANE_CARRIERS_GR.liquefied_methane_in[t]; // GWh;
+        liquefied_methane_balance: METHANE_LIQUEFACTION_PLANTS_RREH.liquefied_methane[t] + LIQUEFIED_METHANE_STORAGE_HUB_RREH.liquefied_methane_out[t] == LIQUEFIED_METHANE_STORAGE_HUB_RREH.liquefied_methane_in[t] + LIQUEFIED_METHANE_CARRIERS_RREH.liquefied_methane_in[t]; // GWh;
 
-#HYPEREDGE COASTAL_CARBON_DIOXIDE_BALANCE_GR
+#HYPEREDGE COASTAL_CARBON_DIOXIDE_BALANCE_RREH
     #CONSTRAINTS
-        only_carrier: DIRECT_AIR_CAPTURE_PLANTS_GR.carbon_dioxide[t] + CARBON_DIOXIDE_STORAGE_GR.carbon_dioxide_out[t] == CARBON_DIOXIDE_STORAGE_GR.carbon_dioxide_in[t] + METHANATION_PLANTS_GR.carbon_dioxide[t];
+        only_carrier: DIRECT_AIR_CAPTURE_PLANTS_RREH.carbon_dioxide[t] + CARBON_DIOXIDE_STORAGE_RREH.carbon_dioxide_out[t] == CARBON_DIOXIDE_STORAGE_RREH.carbon_dioxide_in[t] + METHANATION_PLANTS_RREH.carbon_dioxide[t];
