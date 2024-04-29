@@ -1,16 +1,19 @@
 import json
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
+from matplotlib.collections import BrokenBarHCollection
 import matplotlib.dates as mdates
+import matplotlib.patches as patches
 import pandas as pd
 import os
 import argparse
 import numpy as np
 import re
+import ast
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Analyze GBOML model results with specific criteria.")
-    parser = parser.add_argument('-m', '--mode', help="Mode of operation: analyze_json or analyze_csv", default='analyze_json', choices=['analyze_json', 'analyze_csv'])
+    parser.add_argument('-m', '--mode', help="Mode of operation: analyze_json or analyze_csv", default='analyze_json', choices=['analyze_json', 'analyze_csv'])
     # parser.add_argument('-s', '--scenarios', nargs='+', help='Scenarios to analyze (e.g., hydro wind_onshore)', default=None)
     parser.add_argument('-t', '--timehorizon', type=int, help='Time horizon to filter by', default=17544)
     parser.add_argument('-r', '--report', action='store_true', help='Save as PDF without title for reports')
@@ -66,6 +69,9 @@ def compute_and_plot_balances(scenario, d, results_path, timehorizon, wacc_label
     battery_storage_rreh_out = np.array(d.solution.elements.BATTERY_STORAGE_RREH.variables.electricity_out.values)
     battery_storage_rreh_in = np.array(d.solution.elements.BATTERY_STORAGE_RREH.variables.electricity_in.values)
     hvdc_rreh_in = np.array(d.solution.elements.HVDC_RREH.variables.electricity_in.values)
+
+    parts = scenario.split('_')
+    scenario = '_'.join(parts[:-1])
 
     # Compute and plot power balance for the scenario
     if scenario in power_balances:
@@ -231,6 +237,8 @@ def calculate_plant_capacities(d):
         plant_capacities['wind_onshore_rreh'] = np.sum(d.solution.elements.ON_WIND_PLANTS_RREH.variables.capacity.values)
     if hasattr(d.solution.elements, "OFF_WIND_PLANTS_RREH"):
         plant_capacities['wind_offshore_rreh'] = np.sum(d.solution.elements.OFF_WIND_PLANTS_RREH.variables.capacity.values)
+    if hasattr(d.solution.elements, "SOLAR_PV_PLANTS_RREH"):
+        plant_capacities['wind_offshore_rreh'] = np.sum(d.solution.elements.SOLAR_PV_PLANTS_RREH.variables.capacity.values)
     if hasattr(d.solution.elements, "WAVE_PLANT_RREH"):
         wave_units = d.solution.elements.WAVE_PLANT_RREH.variables.num_units.values[0]
         wave_rp = d.model.nodes.WAVE_PLANT_RREH.parameters.unit_rated_power[0]
@@ -256,10 +264,11 @@ def plot_and_save_capacities(capacities, scenario, results_path, timehorizon, re
     hydro_keys = [k for k in capacities if "HYDRO_PLANT" in k]
     total_hydro_capacity = sum(capacities[k] for k in hydro_keys)
     
-    categories = ['Onshore Wind', 'Offshore Wind', 'Wave', 'Battery Flow', 'Battery Stock']
+    categories = ['Onshore Wind', 'Offshore Wind', 'Solar', 'Wave', 'Battery Flow', 'Battery Stock']
     capacity_values = [
         capacities.get('wind_onshore_rreh', 0),
         capacities.get('wind_offshore_rreh', 0),
+        capacities.get('solar_rreh',0),
         capacities.get('wave_rreh', 0),
         capacities.get('battery_flow', 0),
         capacities.get('battery_stock', 0),
@@ -428,8 +437,15 @@ def plot_production_dynamics(d, results_path, scenario, timehorizon, wacc_label,
         'wind_onshore': ['ON_WIND_PLANTS_RREH'],
         'wind_offshore': ['OFF_WIND_PLANTS_RREH'],
         'hydro': ['HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH'],
-        'wave': ['WAVE_PLANT_RREH']
+        'wave': ['WAVE_PLANT_RREH'],
+        'spain': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH'],
+        'algeria': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH'],
+        'germany': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH']
     }
+
+    parts = scenario.split('_')
+    scenario = '_'.join(parts[:-1])
+
     production_types = production_types_mapping.get(scenario, [])
 
     for production_type in production_types:
@@ -455,7 +471,7 @@ def plot_production_dynamics(d, results_path, scenario, timehorizon, wacc_label,
             ax.set_ylim(-0.1, 0.1)
         else:
             ax.fill_between(date_range, data_series, color=color)
-        ax.set_title(f'{production_type.replace("_", " ").title()} Production (Greenland)', fontsize=10, loc='left')
+        ax.set_title(f'{production_type.replace("_", " ").title()} Production (RREH)', fontsize=10, loc='left')
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
         ax.xaxis.set_major_locator(mdates.MonthLocator())
         ax.set_ylabel('GWh')
@@ -520,7 +536,7 @@ def plot_storage_dynamics(d, results_path, scenario, timehorizon, wacc_label, st
 
     fig, axs = plt.subplots(4, 1, figsize=(12, 8), sharex=True)
     colors = plt.cm.viridis(np.linspace(0, 1, 4))
-    storage_labels = ['Battery Storage Dynamics', 'Hydrogen Storage Dynamics', 'Liquid Methane Storage Dynamics (Greenland)', 'Liquid Methane Storage Dynamics (Belgium)']
+    storage_labels = ['Battery Storage Dynamics', 'Hydrogen Storage Dynamics', 'Liquid Methane Storage Dynamics (RREH)', 'Liquid Methane Storage Dynamics (Belgium)']
 
     data_frames = [battery_data, hydrogen_data, methane_data_src, methane_data_dest]
 
@@ -562,7 +578,7 @@ def calculate_plant_tech_capacities(d):
 
     return plant_capacities
 
-def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizon, report, wacc_label):
+def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizon, wacc_label, report):
     
     categories = ['Electrolysis ', 'DAC', 'Methanation']
     capacity_values = [
@@ -649,6 +665,7 @@ def analyze_json_files(args):
             "scenario": [],
             "wind_onshore_rreh": [],
             "wind_offshore_rreh": [],
+            "solar_rreh": [],
             "wave_rreh": [],
             "hydro_3h_rreh": [],
             "hydro_3j_rreh": [],
@@ -692,7 +709,7 @@ def analyze_json_files(args):
 
                         # Initial check
                         print(f"Plot of balances for {scenario_name} with time horizon {args.timehorizon}")
-                        compute_and_plot_balances(scenario_name, data, results_path, args.timehorizon)
+                        compute_and_plot_balances(scenario_name, data, results_path, args.timehorizon, wacc_label)
 
                         # Compute total costs
                         print(f"Computing total costs for {scenario_name} with time horizon {args.timehorizon}")
@@ -730,7 +747,7 @@ def analyze_json_files(args):
                         # Plot cost breakdown
                         print(f"Plotting the cost breakdown of {scenario_name} with time horizon {args.timehorizon}")                
                         cost_details_RREH = cost_rreh_detailed(data, RREH_nodes)
-                        plot_cost_breakdown(cost_details_RREH, demand_in_mwh, 'Synthetic Methane (Greenland) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'RREH' ,args.report)
+                        plot_cost_breakdown(cost_details_RREH, demand_in_mwh, 'Synthetic Methane (RREH) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'RREH' ,args.report)
                         cost_details_BE = cost_rreh_detailed(data, BE_nodes)
                         plot_cost_breakdown(cost_details_BE, demand_in_mwh, 'Synthetic Methane (Belgium) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'BE', args.report)
 
@@ -762,6 +779,146 @@ def analyze_json_files(args):
 # ============= CSV FILES ANALYSIS =============
 # =============== ============== ===============
 
+def prepare_plot_data(df, column_name):
+    scenarios_expanded = []
+    values_expanded = []
+
+    for index, row in df.iterrows():
+        scenarios = ast.literal_eval(row['scenario'])
+        values = ast.literal_eval(row[column_name])
+
+        for scenario, value in zip(scenarios, values):
+            scenarios_expanded.append(scenario)
+            values_expanded.append(value)
+
+    return pd.DataFrame({
+        'Scenario': scenarios_expanded,
+        column_name: values_expanded
+    })
+
+def plot_price_intervals(df, time_horizon, report=False):
+    # Prepare the data
+    plot_data = prepare_plot_data(df, 'price per mwh')
+
+    # Separate the data into 'Low', 'Mid', and 'High'
+    plot_data['Label'] = plot_data['Scenario'].apply(lambda x: x.split('_')[-1])
+    plot_data['Scenario'] = plot_data['Scenario'].apply(lambda x: '_'.join(x.split('_')[:-1]))
+    
+    # Create a DataFrame to store 'Low', 'Mid', and 'High' values separately for each scenario
+    scenarios = plot_data['Scenario'].unique()
+    data_for_plot = {
+        'Scenario': [],
+        'Low': [],
+        'Mid': [],
+        'High': []
+    }
+
+    # Define unique colors for the specific scenarios
+    unique_colors = {'germany': 'orange', 'algeria': 'orangered', 'spain': 'red'}
+    # Define a color for all other scenarios
+    other_color = 'forestgreen'
+    # Generate a color for each scenario
+    scenario_colors = [unique_colors.get(sc, other_color) for sc in scenarios]
+
+    for scenario in scenarios:
+        scenario_data = plot_data[plot_data['Scenario'] == scenario]
+        data_for_plot['Scenario'].append(scenario)
+        data_for_plot['Low'].append(scenario_data[scenario_data['Label'] == 'Low']['price per mwh'].values[0])
+        data_for_plot['Mid'].append(scenario_data[scenario_data['Label'] == 'Mid']['price per mwh'].values[0])
+        data_for_plot['High'].append(scenario_data[scenario_data['Label'] == 'High']['price per mwh'].values[0])
+
+    # Convert to DataFrame
+    df_plot = pd.DataFrame(data_for_plot)
+    
+    # Plotting
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    # Plot the 'Low' and 'High' values as the range for the boxes
+    boxes = ax.barh(df_plot['Scenario'], df_plot['High'] - df_plot['Low'], left=df_plot['Low'], height=0.42, color='grey', alpha=0.5)
+
+    ax.grid(True, color='gray', linestyle='--', linewidth=0.5)    # Get the ratio of the y-unit to the x-unit
+    
+    x0, x1 = ax.get_xlim()
+    y0, y1 = ax.get_ylim()
+    ratio = (x1 - x0) / (y1 - y0)
+
+    # Plot the 'Mid' values as ellipses
+    for i, (mid_value, scenario) in enumerate(zip(df_plot['Mid'], df_plot['Scenario'])):
+        circle_color = unique_colors.get(scenario, other_color)
+        # Adjust the radius for the ellipse taking into account the axis ratio
+        ellipse = patches.Ellipse((mid_value, i), width=0.40*ratio, height=0.40, angle=0, color=circle_color, zorder=10)
+        ax.add_patch(ellipse)
+        ax.text(mid_value, i, f"{int(round(mid_value))}", ha='center', va='center', color='white', zorder=11)
+
+    # Set the x-axis to start at 0
+    ax.set_xlim(left=0)
+
+    # Labelling and layout
+    plt.xlabel('Price per MWh (€)')
+    plt.ylabel('Scenario')
+
+    img_folder_path = f'scripts/results/img/{time_horizon}'
+    if not os.path.exists(img_folder_path):
+        os.makedirs(img_folder_path)
+
+    if report:
+        plt.savefig(os.path.join(img_folder_path, 'price_intervals.pdf'), bbox_inches='tight', format='pdf')
+    else:
+        plt.title('Price per MWh Intervals per Scenario')
+        plt.tight_layout()
+        plt.savefig(os.path.join(img_folder_path, 'price_intervals.png'), bbox_inches='tight', format='png')
+
+    plt.close(fig)
+
+def prepare_data_for_latex(df, value_column):
+    # Prepare the data with Low, Mid, High values for LaTeX table
+    df['scenario'] = df['scenario'].apply(ast.literal_eval)
+    df[value_column] = df[value_column].apply(ast.literal_eval)
+
+    # Initialize lists to hold the aggregated data
+    scenarios, lows, mids, highs = [], [], [], []
+
+    # Parse and aggregate the data for LaTeX table
+    for index, row in df.iterrows():
+        for i, scenario_name in enumerate(row['scenario']):
+            if 'Low' in scenario_name:
+                lows.append(row[value_column][i])
+            elif 'Mid' in scenario_name:
+                mids.append(row[value_column][i])
+            elif 'High' in scenario_name:
+                highs.append(row[value_column][i])
+                # Add the scenario name without the label and format it for LaTeX
+                scenario_name_formatted = " ".join(scenario_name.split('_')[:-1]).replace('_', '\\_').capitalize()
+                scenarios.append(scenario_name_formatted)
+
+    return pd.DataFrame({
+        'Scenario': scenarios,
+        'Low': lows,
+        'Medium': mids,
+        'High': highs
+    })
+
+def create_latex_table_from_data(df, value_column):
+    # First, prepare the data for LaTeX
+    df_latex = prepare_data_for_latex(df, value_column)
+
+    # Start the LaTeX table code
+    latex_table = "\\begin{table}[H]\n\\centering\n"
+    latex_table += "\\begin{tabular}{|l|c|c|c|}\n\\hline\n"
+    # Add the header row with alignment
+    latex_table += "Scenario & Low & Medium & High \\\\\n\\hline\n"
+
+    # Adding the data rows
+    for index, row in df_latex.iterrows():
+        latex_table += f"{row['Scenario']} & {row['Low']:.2f} & {row['Medium']:.2f} & {row['High']:.2f} \\\\\n"
+
+    # Ending the LaTeX table
+    latex_table += "\\hline\n\\end{tabular}\n"
+    latex_table += "\\caption{Values for different scenarios.}\n"
+    latex_table += "\\label{table:scenarios}\n\\end{table}"
+
+    return latex_table
+
 def analyze_csv_files(args):
     results_dir = 'scripts/results/'
     csv_files = [f for f in os.listdir(results_dir) if f.endswith('.csv')]
@@ -776,6 +933,10 @@ def analyze_csv_files(args):
             # Load the CSV file for analysis
             df = pd.read_csv(os.path.join(results_dir, csv_file))
 
+            plot_price_intervals(df, time_horizon, args.report)
+
+            latex_code = create_latex_table_from_data(df, 'price per mwh')
+            print(latex_code)
             
 # =============== ============== ===============
 # ==================== MAIN ====================
