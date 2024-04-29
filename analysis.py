@@ -7,6 +7,7 @@ import matplotlib.patches as patches
 import pandas as pd
 import os
 import argparse
+from matplotlib.lines import Line2D
 import numpy as np
 import re
 import ast
@@ -814,12 +815,10 @@ def plot_price_intervals(df, time_horizon, report=False):
     }
 
     # Define unique colors for the specific scenarios
-    unique_colors = {'germany': 'orange', 'algeria': 'orangered', 'spain': 'red'}
+    unique_colors = {'germany': 'teal', 'algeria': 'orange', 'spain': 'red'}
     # Define a color for all other scenarios
     other_color = 'forestgreen'
-    # Generate a color for each scenario
-    scenario_colors = [unique_colors.get(sc, other_color) for sc in scenarios]
-
+    
     for scenario in scenarios:
         scenario_data = plot_data[plot_data['Scenario'] == scenario]
         data_for_plot['Scenario'].append(scenario)
@@ -832,26 +831,50 @@ def plot_price_intervals(df, time_horizon, report=False):
     
     # Plotting
     fig, ax = plt.subplots(figsize=(12, 8))
-    
-    # Plot the 'Low' and 'High' values as the range for the boxes
-    boxes = ax.barh(df_plot['Scenario'], df_plot['High'] - df_plot['Low'], left=df_plot['Low'], height=0.42, color='grey', alpha=0.5)
 
-    ax.grid(True, color='gray', linestyle='--', linewidth=0.5)    # Get the ratio of the y-unit to the x-unit
-    
+    # Plot the interval bars with low and high defining their size
+    for i, (low_value, high_value, scenario) in enumerate(zip(df_plot['Low'], df_plot['High'], df_plot['Scenario'])):
+        interval_color = unique_colors.get(scenario, other_color)
+        ax.plot([low_value, high_value], [i, i], color=interval_color, linewidth=2, label=scenario)
+
+    ax.grid(True, color='gray', linestyle='--', linewidth=0.5)
+
+    # Get the ratio of the y-unit to the x-unit
     x0, x1 = ax.get_xlim()
     y0, y1 = ax.get_ylim()
     ratio = (x1 - x0) / (y1 - y0)
 
-    # Plot the 'Mid' values as ellipses
-    for i, (mid_value, scenario) in enumerate(zip(df_plot['Mid'], df_plot['Scenario'])):
-        circle_color = unique_colors.get(scenario, other_color)
-        # Adjust the radius for the ellipse taking into account the axis ratio
-        ellipse = patches.Ellipse((mid_value, i), width=0.40*ratio, height=0.40, angle=0, color=circle_color, zorder=10)
-        ax.add_patch(ellipse)
-        ax.text(mid_value, i, f"{int(round(mid_value))}", ha='center', va='center', color='white', zorder=11)
+    # Plot the 'Low', 'Mid', and 'High' values as text above the sticks
+    for i, (low_value, mid_value, high_value, scenario) in enumerate(zip(df_plot['Low'], df_plot['Mid'], df_plot['High'], df_plot['Scenario'])):
+        stick_color = unique_colors.get(scenario, other_color)
+        ax.plot([low_value, low_value], [i-0.2, i+0.2], color=stick_color, linewidth=2)
+        ax.plot([mid_value, mid_value], [i-0.2, i+0.2], color=stick_color, linewidth=2)
+        ax.plot([high_value, high_value], [i-0.2, i+0.2], color=stick_color, linewidth=2)
+        ax.text(low_value, i+0.3, f"{int(round(low_value))}", ha='center', va='center', color=stick_color, zorder=11)
+        ax.text(mid_value, i+0.3, f"{int(round(mid_value))}", ha='center', va='center', color=stick_color, zorder=11)
+        ax.text(high_value, i+0.3, f"{int(round(high_value))}", ha='center', va='center', color=stick_color, zorder=11)
 
+    # Add legend for the colors
+    legend_elements = []
+    for scenario, color in unique_colors.items():
+        legend_elements.append(Line2D([0], [0], color=color, lw=2, label=scenario))
+    legend_elements.append(Line2D([0], [0], color=other_color, lw=2, label='greenland'))
+    ax.legend(handles=legend_elements)
+
+    # Add all the scenarios labels to the y-axis
+    ax.set_yticks(np.arange(len(df_plot['Scenario'])))
+    # Change 'spain', 'algeria', and 'germany' to 'pv_onshore_wind'
+    df_plot['Scenario'] = df_plot['Scenario'].replace({'spain': 'pv_onshore_wind', 'algeria': 'pv_onshore_wind', 'germany': 'pv_onshore_wind'})
+
+    ax.set_yticklabels(df_plot['Scenario'])
+
+    
     # Set the x-axis to start at 0
     ax.set_xlim(left=0)
+
+    # Add a vertical line at x=149.7 in dark red
+    ax.axvline(x=149.7, color='darkred')
+    ax.text(149.7, -0.5, 'Reference Cost (149.7)', ha='left', va='center', color='darkred')
 
     # Labelling and layout
     plt.xlabel('Price per MWh (€)')
@@ -904,13 +927,26 @@ def create_latex_table_from_data(df, value_column):
 
     # Start the LaTeX table code
     latex_table = "\\begin{table}[H]\n\\centering\n"
-    latex_table += "\\begin{tabular}{|l|c|c|c|}\n\\hline\n"
-    # Add the header row with alignment
-    latex_table += "Scenario & Low & Medium & High \\\\\n\\hline\n"
+    latex_table += "\\begin{tabular}{|l|l|c|c|c|}\n\\hline\n"
+    # Add the header row with alignment and thicker lines
+    latex_table += "\\textbf{Country} & \\textbf{Energy Mix} & \\textbf{Low} & \\textbf{Medium} & \\textbf{High} \\\\\n\\hline\\hline\n"
 
     # Adding the data rows
+    previous_country = None
     for index, row in df_latex.iterrows():
-        latex_table += f"{row['Scenario']} & {row['Low']:.2f} & {row['Medium']:.2f} & {row['High']:.2f} \\\\\n"
+        if row['Scenario'] in ['Spain', 'Germany', 'Algeria']:
+            country = row['Scenario']
+            energy_mix = 'PV Wind onshore'
+        else:
+            country = '\\multirow{6}{*}{Greenland}'  # Updated to 6 rows
+            energy_mix = row['Scenario']
+        if country != previous_country:
+            if previous_country is not None:
+                latex_table += "\\cline{1-5}\n"  # Add smaller line between countries
+            latex_table += f"{country} & {energy_mix} & {row['Low']:.2f} & {row['Medium']:.2f} & {row['High']:.2f} \\\\\n"
+            previous_country = country
+        else:
+            latex_table += f" & {energy_mix} & {row['Low']:.2f} & {row['Medium']:.2f} & {row['High']:.2f} \\\\\n"
 
     # Ending the LaTeX table
     latex_table += "\\hline\n\\end{tabular}\n"
