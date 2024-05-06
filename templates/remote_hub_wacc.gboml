@@ -451,8 +451,8 @@ full_capex_stock = 2.641;
 full_capex_flow = 0.001;
 lifetime_stock = 30.0;
 lifetime_flow = 30.0;
-annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // MEur
-annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // MEur
+annualised_capex_stock = full_capex_stock * global.wacc_be * (1 + global.wacc_be)**lifetime_stock / ((1 + global.wacc_be)**lifetime_stock - 1); // MEur
+annualised_capex_flow = full_capex_flow * global.wacc_be * (1 + global.wacc_be)**lifetime_flow / ((1 + global.wacc_be)**lifetime_flow - 1); // MEur
 fom_stock = 0.05282;
 fom_flow = 0.0;
 vom_stock = 0.0;
@@ -482,7 +482,7 @@ min: vom_stock * liquefied_methane_stored[t] + vom_flow * liquefied_methane_in[t
 #PARAMETERS
 full_capex = 1248.3; // M€ / (kt/h)
 lifetime = 30.0;
-annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+annualised_capex = full_capex * global.wacc_be * (1 + global.wacc_be)**lifetime / ((1 + global.wacc_be)**lifetime - 1); // MEur
 fom = 24.97; // MEur/year
 vom = 0.0;
 conversion_factor = 0.98;

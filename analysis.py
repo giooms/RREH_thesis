@@ -1,4 +1,5 @@
 import json
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from matplotlib.collections import BrokenBarHCollection
@@ -239,7 +240,7 @@ def calculate_plant_capacities(d):
     if hasattr(d.solution.elements, "OFF_WIND_PLANTS_RREH"):
         plant_capacities['wind_offshore_rreh'] = np.sum(d.solution.elements.OFF_WIND_PLANTS_RREH.variables.capacity.values)
     if hasattr(d.solution.elements, "SOLAR_PV_PLANTS_RREH"):
-        plant_capacities['wind_offshore_rreh'] = np.sum(d.solution.elements.SOLAR_PV_PLANTS_RREH.variables.capacity.values)
+        plant_capacities['solar_rreh'] = np.sum(d.solution.elements.SOLAR_PV_PLANTS_RREH.variables.capacity.values)
     if hasattr(d.solution.elements, "WAVE_PLANT_RREH"):
         wave_units = d.solution.elements.WAVE_PLANT_RREH.variables.num_units.values[0]
         wave_rp = d.model.nodes.WAVE_PLANT_RREH.parameters.unit_rated_power[0]
@@ -671,13 +672,17 @@ def analyze_json_files(args):
             "hydro_3h_rreh": [],
             "hydro_3j_rreh": [],
             "hydro_5h_rreh": [],
+            "hydro_rreh": [],
             "battery_flow": [],
             "battery_stock": [],
             "Electrolysis": [],
             "DAC": [],
             "Methanation": [],
             "price per mwh": [],
-            "total cost": []
+            "total cost": [],
+            "total cost_rreh": [],
+            "total cost_be": [],
+            "demand in twh": []
         }
 
         results_path = os.path.join(base_path, scenario, 'results')
@@ -715,8 +720,10 @@ def analyze_json_files(args):
                         # Compute total costs
                         print(f"Computing total costs for {scenario_name} with time horizon {args.timehorizon}")
                         RREH_nodes, BE_nodes, cost_RREH, cost_BE, tot_cost = analyze_system_costs(data)
-                        
+
                         aggregated_data['total cost'].append(tot_cost)
+                        aggregated_data['total cost_rreh'].append(cost_RREH)
+                        aggregated_data['total cost_be'].append(cost_BE)
 
                         # Retrieve and plot the installed renewable capacities
                         print(f"Retrieving and plotting installed capacities for {scenario_name} with time horizon {args.timehorizon}")
@@ -724,7 +731,7 @@ def analyze_json_files(args):
 
                         # Aggregate plant capacities
                         # Direct mapping for non-hydro capacities
-                        for capacity_type in ["wind_onshore_rreh", "wind_offshore_rreh", "wave_rreh", "battery_flow", "battery_stock"]:
+                        for capacity_type in ["wind_onshore_rreh", "wind_offshore_rreh", "wave_rreh", "solar_rreh", "battery_flow", "battery_stock"]:
                             aggregated_data[capacity_type].append(plant_capacities.get(capacity_type, "NA"))
 
                         # Handle hydro capacities
@@ -734,16 +741,24 @@ def analyze_json_files(args):
                             "HYDRO_PLANT_03j_RREH": "hydro_3j_rreh",
                             "HYDRO_PLANT_05h_RREH": "hydro_5h_rreh",
                         }
+                        hydro_rreh_sum = 0
                         for original_key, new_key in hydro_mappings.items():
                             # Use 'NA' if not found
                             capacity = plant_capacities.get(original_key, "NA")
                             aggregated_data[new_key].append(capacity)
+                            if isinstance(capacity, (int, float)):
+                                hydro_rreh_sum += capacity
+                        aggregated_data['hydro_rreh'].append(hydro_rreh_sum)
 
                         # Retrieve and plot the installed capacities
                         print(f"Computing the price of {scenario_name} with time horizon {args.timehorizon}")
                         price_per_mwh, demand_in_mwh = calculate_price_per_mwh(data, tot_cost, scenario_name, args.timehorizon)
 
+                        # Convert demand_in_mwh to demand_in_twh
+                        demand_in_twh = demand_in_mwh / 1e6
+
                         aggregated_data['price per mwh'].append(price_per_mwh)
+                        aggregated_data['demand in twh'].append(demand_in_twh)
                         
                         # Plot cost breakdown
                         print(f"Plotting the cost breakdown of {scenario_name} with time horizon {args.timehorizon}")                
@@ -771,10 +786,10 @@ def analyze_json_files(args):
 
         all_data.append(aggregated_data)
 
-    df = pd.DataFrame(all_data)  # Ensuring data is in a list to form a single row
-    df.to_csv(csv_path, index=False)
+        df = pd.DataFrame(all_data)  # Ensuring data is in a list to form a single row
+        df.to_csv(csv_path, index=False)
 
-    print(f"Data for {scenario} appended to {csv_path}")
+        print(f"Data for {scenario} appended to {csv_path}")
 
 # =============== ============== ===============
 # ============= CSV FILES ANALYSIS =============
@@ -782,183 +797,308 @@ def analyze_json_files(args):
 
 def prepare_plot_data(df, column_name):
     scenarios_expanded = []
-    values_expanded = []
+    constant_values = []
+    diff_values = []
 
     for index, row in df.iterrows():
         scenarios = ast.literal_eval(row['scenario'])
         values = ast.literal_eval(row[column_name])
 
         for scenario, value in zip(scenarios, values):
-            scenarios_expanded.append(scenario)
-            values_expanded.append(value)
+            scenario_parts = scenario.split('_')
+            scenario_name = '_'.join(scenario_parts[:-1])
+            scenario_type = scenario_parts[-1]
+
+            if scenario_type == 'constant':
+                constant_values.append(value)
+            elif scenario_type == 'diff':
+                diff_values.append(value)
+
+            if scenario_type == 'diff':
+                scenarios_expanded.append(scenario_name)
 
     return pd.DataFrame({
         'Scenario': scenarios_expanded,
-        column_name: values_expanded
+        f'{column_name} constant': constant_values,
+        f'{column_name} diff': diff_values
     })
 
 def plot_price_intervals(df, time_horizon, report=False):
     # Prepare the data
     plot_data = prepare_plot_data(df, 'price per mwh')
 
-    # Separate the data into 'Low', 'Mid', and 'High'
-    plot_data['Label'] = plot_data['Scenario'].apply(lambda x: x.split('_')[-1])
-    plot_data['Scenario'] = plot_data['Scenario'].apply(lambda x: '_'.join(x.split('_')[:-1]))
-    
-    # Create a DataFrame to store 'Low', 'Mid', and 'High' values separately for each scenario
-    scenarios = plot_data['Scenario'].unique()
-    data_for_plot = {
-        'Scenario': [],
-        'Low': [],
-        'Mid': [],
-        'High': []
-    }
+    # Filter to include only the specified scenarios
+    valid_scenarios = ['hydro_wind', 'germany', 'algeria', 'spain']
+    plot_data = plot_data[plot_data['Scenario'].isin(valid_scenarios)]
 
-    # Define unique colors for the specific scenarios
-    unique_colors = {'germany': 'teal', 'algeria': 'orange', 'spain': 'red'}
-    # Define a color for all other scenarios
-    other_color = 'forestgreen'
-    
-    for scenario in scenarios:
-        scenario_data = plot_data[plot_data['Scenario'] == scenario]
-        data_for_plot['Scenario'].append(scenario)
-        data_for_plot['Low'].append(scenario_data[scenario_data['Label'] == 'Low']['price per mwh'].values[0])
-        data_for_plot['Mid'].append(scenario_data[scenario_data['Label'] == 'Mid']['price per mwh'].values[0])
-        data_for_plot['High'].append(scenario_data[scenario_data['Label'] == 'High']['price per mwh'].values[0])
+    # Rename 'hydro_wind' scenario to 'greenland'
+    plot_data.loc[plot_data['Scenario'] == 'hydro_wind', 'Scenario'] = 'greenland'
 
-    # Convert to DataFrame
-    df_plot = pd.DataFrame(data_for_plot)
-    
+    scenarios = plot_data['Scenario'].tolist()
+    constant_values = plot_data['price per mwh constant'].tolist()
+    diff_values = plot_data['price per mwh diff'].tolist()
+
     # Plotting
     fig, ax = plt.subplots(figsize=(12, 8))
+    x = np.arange(len(scenarios))
+    bar_width = 0.35
+    opacity = 0.7
+    bars1 = ax.bar(x - bar_width/2, constant_values, bar_width, alpha=opacity, color='tab:blue')
+    colors = ['tab:green' if constant - diff > 0 else 'tab:red' for constant, diff in zip(constant_values, diff_values)]
+    bars2 = ax.bar(x + bar_width/2, diff_values, bar_width, alpha=opacity, color=colors)
 
-    # Plot the interval bars with low and high defining their size
-    for i, (low_value, high_value, scenario) in enumerate(zip(df_plot['Low'], df_plot['High'], df_plot['Scenario'])):
-        interval_color = unique_colors.get(scenario, other_color)
-        ax.plot([low_value, high_value], [i, i], color=interval_color, linewidth=2, label=scenario)
+    ax.set_xlabel('Country')
+    ax.set_ylabel('Price per MWh (€)')
+    if not report:
+        ax.set_title('Price per MWh Intervals per Country')
+    ax.set_xticks(x)
+    ax.set_xticklabels([scenario.capitalize() for scenario in scenarios])
+    red_patch = mpatches.Patch(color='tab:red', label='Differentiated (Worse)', alpha=0.7)
+    blue_patch = mpatches.Patch(color='tab:blue', label='Constant (7%)', alpha=0.7)
+    green_patch = mpatches.Patch(color='tab:green', label='Differentiated (Better)', alpha=0.7)
+    ax.legend(title='WACC is', handles=[blue_patch, green_patch, red_patch], loc='upper left')
 
-    ax.grid(True, color='gray', linestyle='--', linewidth=0.5)
+    for i, (constant_value, diff_value, scenario) in enumerate(zip(constant_values, diff_values, scenarios)):
+        percent_change = ((diff_value - constant_value) / constant_value) * 100
+        sign = "+" if percent_change > 0 else ""
+        annotation_text = f"{sign}{percent_change:.0f}%"
+        max_val = max(constant_value, diff_value)
+        annotation_y = max_val + 5
+        color = 'black'
 
-    # Get the ratio of the y-unit to the x-unit
-    x0, x1 = ax.get_xlim()
-    y0, y1 = ax.get_ylim()
-    ratio = (x1 - x0) / (y1 - y0)
-
-    # Plot the 'Low', 'Mid', and 'High' values as text above the sticks
-    for i, (low_value, mid_value, high_value, scenario) in enumerate(zip(df_plot['Low'], df_plot['Mid'], df_plot['High'], df_plot['Scenario'])):
-        stick_color = unique_colors.get(scenario, other_color)
-        ax.plot([low_value, low_value], [i-0.2, i+0.2], color=stick_color, linewidth=2)
-        ax.plot([mid_value, mid_value], [i-0.2, i+0.2], color=stick_color, linewidth=2)
-        ax.plot([high_value, high_value], [i-0.2, i+0.2], color=stick_color, linewidth=2)
-        ax.text(low_value, i+0.3, f"{int(round(low_value))}", ha='center', va='center', color=stick_color, zorder=11)
-        ax.text(mid_value, i+0.3, f"{int(round(mid_value))}", ha='center', va='center', color=stick_color, zorder=11)
-        ax.text(high_value, i+0.3, f"{int(round(high_value))}", ha='center', va='center', color=stick_color, zorder=11)
-
-    # Add legend for the colors
-    legend_elements = []
-    for scenario, color in unique_colors.items():
-        legend_elements.append(Line2D([0], [0], color=color, lw=2, label=scenario))
-    legend_elements.append(Line2D([0], [0], color=other_color, lw=2, label='greenland'))
-    ax.legend(handles=legend_elements)
-
-    # Add all the scenarios labels to the y-axis
-    ax.set_yticks(np.arange(len(df_plot['Scenario'])))
-    # Change 'spain', 'algeria', and 'germany' to 'pv_onshore_wind'
-    df_plot['Scenario'] = df_plot['Scenario'].replace({'spain': 'pv_onshore_wind', 'algeria': 'pv_onshore_wind', 'germany': 'pv_onshore_wind'})
-
-    ax.set_yticklabels(df_plot['Scenario'])
-
-    
-    # Set the x-axis to start at 0
-    ax.set_xlim(left=0)
-
-    # Add a vertical line at x=149.7 in dark red
-    ax.axvline(x=149.7, color='darkred')
-    ax.text(149.7, -0.5, 'Reference Cost (149.7)', ha='left', va='center', color='darkred')
-
-    # Labelling and layout
-    plt.xlabel('Price per MWh (€)')
-    plt.ylabel('Scenario')
+        ax.text(i, annotation_y, annotation_text, ha='center', bbox=dict(facecolor='white', alpha=0.8))
+        ax.text(i - bar_width/2, constant_value / 2, f"{round(constant_value, 2)}", ha='center', va='center', color='white')
+        ax.text(i + bar_width/2, diff_value / 2, f"{round(diff_value, 2)}", ha='center', va='center', color='white')
 
     img_folder_path = f'scripts/results/img/{time_horizon}'
     if not os.path.exists(img_folder_path):
         os.makedirs(img_folder_path)
-
     if report:
         plt.savefig(os.path.join(img_folder_path, 'price_intervals.pdf'), bbox_inches='tight', format='pdf')
     else:
-        plt.title('Price per MWh Intervals per Scenario')
         plt.tight_layout()
         plt.savefig(os.path.join(img_folder_path, 'price_intervals.png'), bbox_inches='tight', format='png')
 
+    # Write data to LaTeX table in a .txt file
+    table_data = plot_data.rename(columns={'Scenario': 'Country', 'price per mwh constant': 'WACC constant', 'price per mwh diff': 'WACC differentiated'})[['Country', 'WACC constant', 'WACC differentiated']].reset_index(drop=True)
+
+    styled = (table_data.style
+          .format({"WACC constant": "{:.2f}", "WACC differentiated": "{:.2f}"})
+          .format_index(escape="latex", axis=0)
+          .hide(axis=0))
+
+# Export the styled DataFrame to LaTeX
+    styled.to_latex(
+        os.path.join(img_folder_path, 'latex.txt'),
+        position_float='centering',
+        hrules=True
+    )
+
     plt.close(fig)
 
-def prepare_data_for_latex(df, value_column):
-    # Prepare the data with Low, Mid, High values for LaTeX table
-    df['scenario'] = df['scenario'].apply(ast.literal_eval)
-    df[value_column] = df[value_column].apply(ast.literal_eval)
+def plot_technology_capacities_and_prices(df, time_horizon, report=False):
+    valid_scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro']
 
-    # Initialize lists to hold the aggregated data
-    scenarios, lows, mids, highs = [], [], [], []
+    # Prepare the price data
+    price_data = prepare_plot_data(df, 'price per mwh')
+    price_data = price_data[price_data['Scenario'].isin(valid_scenarios)]
+    price_data = price_data[['Scenario', 'price per mwh constant']]
 
-    # Parse and aggregate the data for LaTeX table
-    for index, row in df.iterrows():
-        for i, scenario_name in enumerate(row['scenario']):
-            if 'Low' in scenario_name:
-                lows.append(row[value_column][i])
-            elif 'Mid' in scenario_name:
-                mids.append(row[value_column][i])
-            elif 'High' in scenario_name:
-                highs.append(row[value_column][i])
-                # Add the scenario name without the label and format it for LaTeX
-                scenario_name_formatted = " ".join(scenario_name.split('_')[:-1]).replace('_', '\\_').capitalize()
-                scenarios.append(scenario_name_formatted)
+    # Prepare the capacity data
+    capacity_data = pd.DataFrame()
 
-    return pd.DataFrame({
-        'Scenario': scenarios,
-        'Low': lows,
-        'Medium': mids,
-        'High': highs
-    })
+    for valid_scenario in valid_scenarios:
+        capacity_col = f'{valid_scenario}_rreh'
 
-def create_latex_table_from_data(df, value_column):
-    # First, prepare the data for LaTeX
-    df_latex = prepare_data_for_latex(df, value_column)
+        temp_data = prepare_plot_data(df, capacity_col)
+        temp_data = temp_data[temp_data['Scenario'] == valid_scenario]  # Select rows with matching scenario
+        temp_data = temp_data[['Scenario', f'{capacity_col} constant']].rename(
+            columns={f'{capacity_col} constant': 'installed capacity'}
+        )
+        capacity_data = pd.concat([capacity_data, temp_data], ignore_index=True)
 
-    # Start the LaTeX table code
-    latex_table = "\\begin{table}[H]\n\\centering\n"
-    latex_table += "\\begin{tabular}{|l|l|c|c|c|}\n\\hline\n"
-    # Add the header row with alignment and thicker lines
-    latex_table += "\\textbf{Country} & \\textbf{Energy Mix} & \\textbf{Low} & \\textbf{Medium} & \\textbf{High} \\\\\n\\hline\\hline\n"
+    # Combine the two dataframes on 'Scenario'
+    plot_data = pd.merge(price_data, capacity_data, on='Scenario')
 
-    # Adding the data rows
-    previous_country = None
-    for index, row in df_latex.iterrows():
-        if row['Scenario'] in ['Spain', 'Germany', 'Algeria']:
-            country = row['Scenario']
-            energy_mix = 'PV Wind onshore'
-        else:
-            country = '\\multirow{6}{*}{Greenland}'  # Updated to 6 rows
-            energy_mix = row['Scenario']
-        if country != previous_country:
-            if previous_country is not None:
-                latex_table += "\\cline{1-5}\n"  # Add smaller line between countries
-            latex_table += f"{country} & {energy_mix} & {row['Low']:.2f} & {row['Medium']:.2f} & {row['High']:.2f} \\\\\n"
-            previous_country = country
-        else:
-            latex_table += f" & {energy_mix} & {row['Low']:.2f} & {row['Medium']:.2f} & {row['High']:.2f} \\\\\n"
+    # Ensure the values are numeric
+    plot_data['installed capacity'] = pd.to_numeric(plot_data['installed capacity'], errors='coerce')
+    plot_data['price per mwh constant'] = pd.to_numeric(plot_data['price per mwh constant'], errors='coerce')
 
-    # Ending the LaTeX table
-    latex_table += "\\hline\n\\end{tabular}\n"
-    latex_table += "\\caption{Values for different scenarios.}\n"
-    latex_table += "\\label{table:scenarios}\n\\end{table}"
+    print(plot_data)
 
-    return latex_table
+    # Settings for the dual bars
+    n = len(plot_data)
+    index = np.arange(n)
+    bar_width = 0.35
+
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+
+    # Colors and aesthetics
+    color_capacity = 'tab:blue'
+    color_price = 'tab:red'
+
+    # Plot installed capacity
+    capacity_bars = ax1.bar(index - bar_width / 2, plot_data['installed capacity'].round(3), bar_width,
+                            color=color_capacity, label='Installed Capacity')
+
+    # Create a twin Axes sharing the x-axis for the price per MWh
+    ax2 = ax1.twinx()
+    price_bars = ax2.bar(index + bar_width / 2, plot_data['price per mwh constant'].round(3), bar_width,
+                         color=color_price, label='Price per MWh', alpha=0.7)
+
+    # Labeling and aesthetics
+    ax1.set_xlabel('Technology')
+    ax1.set_ylabel('Installed Capacity (GW)', color='black')
+    ax1.tick_params(axis='y', labelcolor='black')
+    ax2.set_ylabel('Price per MWh (€)', color='black')
+    ax2.tick_params(axis='y', labelcolor='black')
+    ax1.set_xticks(index)
+    ax1.set_xticklabels(plot_data['Scenario'])
+
+    # Annotate the bars with their values
+    for bar in capacity_bars:
+        height = bar.get_height()
+        ax1.annotate(f'{height}',
+                     xy=(bar.get_x() + bar_width / 2, height),
+                     xytext=(0, 3),  # 3 points vertical offset
+                     textcoords="offset points",
+                     ha='center', va='bottom')
+
+    for bar in price_bars:
+        height = bar.get_height()
+        ax2.annotate(f'{height}',
+                     xy=(bar.get_x() + bar_width / 2, height),
+                     xytext=(0, 3),  # 3 points vertical offset
+                     textcoords="offset points",
+                     ha='center', va='bottom')
+
+    fig.legend(loc="upper right", bbox_to_anchor=(1, 1), bbox_transform=ax1.transAxes)
+    if not report:
+        plt.title('Installed Capacity and Price per MWh by Isolated Technology')
+    fig.tight_layout()
+
+    img_folder_path = f'scripts/results/img/{time_horizon}'
+    if not os.path.exists(img_folder_path):
+        os.makedirs(img_folder_path)
+    if report:
+        plt.savefig(os.path.join(img_folder_path, 'solo_tech_capa.pdf'), bbox_inches='tight', format='pdf')
+    else:
+        plt.tight_layout()
+        plt.savefig(os.path.join(img_folder_path, 'solo_tech_capa.png'), bbox_inches='tight', format='png')
+
+    # Write data to LaTeX table in a .txt file
+    table_data = plot_data.rename(columns={'Scenario': 'Technology', 'price per mwh constant': 'Price (€/MWh)', 'installed capacity': 'Installed Capacity (GW)'})[['Technology', 'Price (€/MWh)', 'Installed Capacity (GW)']].reset_index(drop=True)
+
+    styled = (table_data.style
+          .format({"Price (€/MWh)": "{:.2f}", "Installed Capacity (GW)": "{:.2f}"})
+          .format_index(escape="latex", axis=0)
+          .hide(axis=0))
+
+    # Export the styled DataFrame to LaTeX
+    with open(os.path.join(img_folder_path, 'latex.txt'), 'a') as file:
+            file.write('\n')  # Add a space before
+            styled.to_latex(file, 
+                            position_float='centering',
+                            hrules=True
+            )
+            file.write('\n')  # Add a space after
+
+    plt.close(fig)
+
+def plot_stacked_bar_costs(df, time_horizon, report=False):
+    exclude_scenarios = ['spain', 'germany', 'algeria']
+
+    # Prepare the total cost data
+    demand_in_twh = 12.970272171668919
+
+    # Retrieve cost_rreh and cost_be with prepare_plot_data
+    cost_rreh = prepare_plot_data(df, 'total cost_rreh')
+    cost_be = prepare_plot_data(df, 'total cost_be')
+    total_cost_mwh = prepare_plot_data(df, 'price per mwh')
+
+    # Convert the column with 'constant' in it to floats
+    cost_rreh['price_gr'] = cost_rreh['total cost_rreh constant'].astype(float)
+    cost_be['price_be'] = cost_be['total cost_be constant'].astype(float)
+    total_cost_mwh['price_mwh'] = total_cost_mwh['price per mwh constant'].astype(float)
+
+
+    # Convert to €/MWh
+    cost_rreh['price_gr'] = cost_rreh['price_gr'] / demand_in_twh
+    cost_be['price_be'] = cost_be['price_be'] / demand_in_twh
+
+    # Remove the column with 'diff'
+    cost_rreh.drop('total cost_rreh diff', axis=1, inplace=True)
+    cost_be.drop('total cost_be diff', axis=1, inplace=True)
+    total_cost_mwh.drop('price per mwh diff', axis=1, inplace=True)
+
+    # Merge dataframes
+    cost_data = pd.merge(cost_rreh, cost_be, on='Scenario')
+    cost_data = pd.merge(cost_data, total_cost_mwh, on='Scenario')
+    cost_data = cost_data[~cost_data['Scenario'].isin(exclude_scenarios)]
+
+    # Settings for the stacked bars
+    n = len(cost_data)
+    index = np.arange(n)
+    bar_width = 0.35
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Plot the stacked bars with the specified colors
+    rreh_bars = ax.bar(index, cost_data['price_gr'], bar_width, label='Cost GR (€MWh)', color='tab:blue')
+    be_bars = ax.bar(index, cost_data['price_be'], bar_width,
+                     bottom=cost_data['price_gr'], label='Cost BE (€MWh)', color='tab:red', alpha=0.7)
+
+    # Labeling and aesthetics
+    ax.set_xlabel('Scenario')
+    ax.set_ylabel('Cost (€MWh)', color='black')
+    ax.tick_params(axis='y', labelcolor='black')
+    ax.set_xticks(index)
+    ax.set_xticklabels(cost_data['Scenario'])
+
+    # Annotate the bars with their values
+    for bar, cost in zip(rreh_bars, cost_data['price_mwh']):
+        height = bar.get_height()
+        ax.annotate(f'{cost:.2f}',
+                    xy=(bar.get_x() + bar.get_width() / 2, height),
+                    xytext=(0, 3),  # 3 points vertical offset
+                    textcoords="offset points",
+                    ha='center', va='bottom')
+
+    fig.legend(loc="upper right", bbox_to_anchor=(1, 1), bbox_transform=ax.transAxes)
+    plt.title('Total Costs per MWh by Scenario')
+    fig.tight_layout()
+    img_folder_path = f'scripts/results/img/{time_horizon}'
+    if not os.path.exists(img_folder_path):
+        os.makedirs(img_folder_path)
+    if report:
+        plt.savefig(os.path.join(img_folder_path, 'costs_scenarios_constant.pdf'), bbox_inches='tight', format='pdf')
+    else:
+        plt.tight_layout()
+        plt.savefig(os.path.join(img_folder_path, 'costs_scenarios_constant.png'), bbox_inches='tight', format='png')
+
+    # Write data to LaTeX table in a .txt file
+    table_data = cost_data.rename(columns={'Scenario': 'Scenario', 'price_gr': 'Price GR (€/MWh)', 'price_be': 'Price BE (€/MWh)', 'price_mwh': 'Total Price (€/MWh)'})[['Scenario', 'Price GR (€/MWh)', 'Price BE (€/MWh)', 'Total Price (€/MWh)']].reset_index(drop=True)
+
+    styled = (table_data.style
+          .format({"Price (€/MWh)": "{:.2f}", "Installed Capacity (GW)": "{:.2f}"})
+          .format_index(escape="latex", axis=0)
+          .hide(axis=0))
+
+    # Export the styled DataFrame to LaTeX
+    with open(os.path.join(img_folder_path, 'latex.txt'), 'a') as file:
+            file.write('\n')  # Add a space before
+            styled.to_latex(file, 
+                            position_float='centering',
+                            hrules=True
+            )
+            file.write('\n')  # Add a space after
+
+    plt.close(fig)
 
 def analyze_csv_files(args):
     results_dir = 'scripts/results/'
     csv_files = [f for f in os.listdir(results_dir) if f.endswith('.csv')]
-
+    
     for csv_file in csv_files:
         # Extract the time horizon from the file name using regex
         match = re.search(r'scenario_analysis_results_(\d+).csv', csv_file)
@@ -966,14 +1106,28 @@ def analyze_csv_files(args):
             time_horizon = match.group(1)
             print(f"Analyzing CSV file: {csv_file} with time horizon: {time_horizon}")
             
+            # Check if 'latex.txt' exists in the folder
+            latex_file_path = os.path.join(results_dir, 'img', time_horizon, 'latex.txt')
+            if os.path.exists(latex_file_path):
+                # If it exists, erase its content
+                with open(latex_file_path, 'w') as latex_file:
+                    latex_file.write('')
+            else:
+                # If it doesn't exist, create a new file
+                os.makedirs(os.path.dirname(latex_file_path), exist_ok=True)
+                with open(latex_file_path, 'w') as latex_file:
+                    pass
+
             # Load the CSV file for analysis
             df = pd.read_csv(os.path.join(results_dir, csv_file))
 
             plot_price_intervals(df, time_horizon, args.report)
 
-            latex_code = create_latex_table_from_data(df, 'price per mwh')
-            print(latex_code)
-            
+            plot_technology_capacities_and_prices(df, time_horizon, args.report)
+
+            plot_stacked_bar_costs(df, time_horizon, args.report)
+    
+
 # =============== ============== ===============
 # ==================== MAIN ====================
 # =============== ============== ===============
@@ -988,3 +1142,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

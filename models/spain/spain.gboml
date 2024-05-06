@@ -2,9 +2,9 @@
     T=8760;
 
 #GLOBAL
-    wacc = 0.07;
-    solar_wacc = 0.036;
-    wind_wacc = 0.031;
+    //wacc = 0.07;
+    //solar_wacc = 0.036;
+    //wind_wacc = 0.031;
     number_years_horizon = T/8760;
     co2_emission_cost = 0;
 
@@ -13,7 +13,7 @@
         full_capex = 380.0;
         lifetime = 25.0;
         annualised_capex = full_capex * global.solar_wacc * (1 + global.solar_wacc)**lifetime / ((1 + global.solar_wacc)**lifetime - 1); // MEur
-        fom = 7.25; // MEur/year
+        fom = 9.5; // MEur/year
         vom = 0.0;
         capacity_factor_PV = import "..\..\data\pv_capacity_factors_ES.csv"; // Dimensionless
         max_capacity = 500.0; // GW
@@ -33,9 +33,9 @@
     #PARAMETERS
         full_capex = 1110.0;
         lifetime = 30.0;
-        annualised_capex = full_capex * global.wind_wacc * (1 + global.wind_wacc)**lifetime / ((1 + global.wind_wacc)**lifetime - 1); // MEur
-        fom = 12.6; // MEur/year
-        vom = 0.00135; // MEur/GWh
+        annualised_capex = full_capex * global.onshore_wacc * (1 + global.onshore_wacc)**lifetime / ((1 + global.onshore_wacc)**lifetime - 1); // MEur
+        fom = 13.4; // MEur/year
+        vom = 0.00144; // MEur/GWh
         capacity_factor_wind = import "..\..\data\wind_capacity_factors_ES.csv"; // Dimensionless
         max_capacity = 500.0; // GW
     #VARIABLES
@@ -96,8 +96,8 @@ full_capex_stock = 2.641;
 full_capex_flow = 0.001;
 lifetime_stock = 30.0;
 lifetime_flow = 30.0;
-annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // MEur
-annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // MEur
+annualised_capex_stock = full_capex_stock * global.wacc_be * (1 + global.wacc_be)**lifetime_stock / ((1 + global.wacc_be)**lifetime_stock - 1); // MEur
+annualised_capex_flow = full_capex_flow * global.wacc_be * (1 + global.wacc_be)**lifetime_flow / ((1 + global.wacc_be)**lifetime_flow - 1); // MEur
 fom_stock = 0.05282;
 fom_flow = 0.0;
 vom_stock = 0.0;
@@ -127,7 +127,7 @@ min: vom_stock * liquefied_methane_stored[t] + vom_flow * liquefied_methane_in[t
 #PARAMETERS
 full_capex = 1248.3;
 lifetime = 30.0;
-annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+annualised_capex = full_capex * global.wacc_be * (1 + global.wacc_be)**lifetime / ((1 + global.wacc_be)**lifetime - 1); // MEur
 fom = 24.97; // MEur/year
 vom = 0.0;
 conversion_factor = 0.98;
