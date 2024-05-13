@@ -40,7 +40,7 @@ cap_co2 = 0.0; // kt C02
 	demand = import "..\..\data\demand_ng.csv"; // /!\ Gas Demand Constant // GWh (ch4)
     conversion_factor = 15.31; // GWh/kt of liquefied gas
 	#CONSTRAINTS
-	conversion_factor * LIQUEFIED_METHANE_REGASIFICATION.methane[t] == 10 * demand[t];
+	LIQUEFIED_METHANE_REGASIFICATION.methane[t] == demand[t];
 
 // Methane Balance Belgium Liquid
 #HYPEREDGE DESTINATION_LIQUEFIED_METHANE_BALANCE

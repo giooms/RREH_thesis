@@ -20,6 +20,28 @@ SCENARIO_FILES = {
     'germany': 'germany.gboml'
 }
 
+def set_wacc_parameters(gboml_model, wacc_case, scenario):
+    """ 
+    Sets WACC parameters based on the case and scenario. 
+    """
+    if wacc_case == 'constant':
+        constant_wacc = 0.07
+        params = {param: constant_wacc for param in ['wacc', 'wacc_be', 'onshore_wacc', 'offshore_wacc', 'hydro_wacc', 'solar_wacc']}
+    elif wacc_case == 'diff':
+        # Set default values for wacc_be, which is common across all 'diff' scenarios
+        common_wacc_be = 0.0441
+        # Dictionaries for specific scenarios
+        scenario_params = {
+            'spain': {'wacc': 0.0587, 'onshore_wacc': 0.031, 'solar_wacc': 0.036},
+            'germany': {'wacc': 0.0353, 'onshore_wacc': 0.013, 'solar_wacc': 0.013},
+            'algeria': {'wacc': 0.1011, 'onshore_wacc': 0.114, 'solar_wacc': 0.11},
+            'default': {'wacc': 0.0353, 'onshore_wacc': 0.015, 'offshore_wacc': 0.015, 'hydro_wacc': 0.0421}
+        }
+        params = scenario_params.get(scenario, scenario_params['default'])
+        params['wacc_be'] = common_wacc_be  # Add common wacc_be
+
+    global_parameters = [(k, v) for k, v in params.items()]
+    gboml_model.add_global_parameters(global_parameters)
 
 def run_scenario(scenario, timehorizon, wacc_case):
     """
@@ -33,35 +55,7 @@ def run_scenario(scenario, timehorizon, wacc_case):
     nodes, edges, param = gboml_model.import_all_nodes_and_edges(gboml_model_full_path)
     gboml_model.add_global_parameters(param)
 
-    if wacc_case == 'constant':
-        gboml_model.add_global_parameter('wacc', 0.07)
-        gboml_model.add_global_parameter('wacc_be', 0.07)
-        gboml_model.add_global_parameter('onshore_wacc', 0.07)
-        gboml_model.add_global_parameter('offshore_wacc', 0.07)
-        gboml_model.add_global_parameter('hydro_wacc', 0.07)
-        gboml_model.add_global_parameter('solar_wacc', 0.07)
-    else:  # 'diff' case
-        if scenario == 'spain':
-            gboml_model.add_global_parameter('wacc', 0.0587)
-            gboml_model.add_global_parameter('wacc_be', 0.0441)
-            gboml_model.add_global_parameter('onshore_wacc', 0.031)
-            gboml_model.add_global_parameter('solar_wacc', 0.036)
-        elif scenario == 'germany':
-            gboml_model.add_global_parameter('wacc', 0.0353)
-            gboml_model.add_global_parameter('wacc_be', 0.0441)
-            gboml_model.add_global_parameter('onshore_wacc', 0.013)
-            gboml_model.add_global_parameter('solar_wacc', 0.013)
-        elif scenario == 'algeria':
-            gboml_model.add_global_parameter('wacc', 0.1011)
-            gboml_model.add_global_parameter('wacc_be', 0.0441)
-            gboml_model.add_global_parameter('onshore_wacc', 0.114)
-            gboml_model.add_global_parameter('solar_wacc', 0.11)
-        else:
-            gboml_model.add_global_parameter('wacc', 0.0353)
-            gboml_model.add_global_parameter('wacc_be', 0.0441)
-            gboml_model.add_global_parameter('onshore_wacc', 0.015)
-            gboml_model.add_global_parameter('offshore_wacc', 0.015)
-            gboml_model.add_global_parameter('hydro_wacc', 0.0421)
+    set_wacc_parameters(gboml_model, wacc_case, scenario)
 
     gboml_model.add_nodes_in_model(*nodes)
     gboml_model.add_hyperedges_in_model(*edges)

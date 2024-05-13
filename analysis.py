@@ -102,7 +102,7 @@ def compute_and_plot_balances(scenario, d, results_path, timehorizon, wacc_label
     conversion_factor = d.model.hyperedges.DESTINATION_METHANE_BALANCE.parameters.conversion_factor
     demand_CH4 = np.array(d.model.hyperedges.DESTINATION_METHANE_BALANCE.parameters.demand)
     lch4_regasification_be = np.array(d.solution.elements.LIQUEFIED_METHANE_REGASIFICATION.variables.methane.values)
-    ch4_balance_be = conversion_factor * lch4_regasification_be - 10 * demand_CH4[:timehorizon]
+    ch4_balance_be =  lch4_regasification_be - demand_CH4[:timehorizon]
 
     plot_balance(axs[3], ch4_balance_be, 'BE_CH4 Balance')
 
@@ -258,6 +258,7 @@ def calculate_plant_capacities(d):
 
     plant_capacities['battery_flow'] = np.sum(d.solution.elements.BATTERY_STORAGE_RREH.variables.capacity_flow.values)
     plant_capacities['battery_stock'] = np.sum(d.solution.elements.BATTERY_STORAGE_RREH.variables.capacity_stock.values)
+    plant_capacities['electrolysis'] = np.sum(d.solution.elements.ELECTROLYSIS_PLANTS_RREH.variables.capacity.values)
 
     return plant_capacities
 
@@ -266,7 +267,7 @@ def plot_and_save_capacities(capacities, scenario, results_path, timehorizon, re
     hydro_keys = [k for k in capacities if "HYDRO_PLANT" in k]
     total_hydro_capacity = sum(capacities[k] for k in hydro_keys)
     
-    categories = ['Onshore Wind', 'Offshore Wind', 'Solar', 'Wave', 'Battery Flow', 'Battery Stock']
+    categories = ['Onshore Wind', 'Offshore Wind', 'Solar', 'Wave', 'Battery Flow', 'Battery Stock', 'Electrolysis']
     capacity_values = [
         capacities.get('wind_onshore_rreh', 0),
         capacities.get('wind_offshore_rreh', 0),
@@ -274,6 +275,7 @@ def plot_and_save_capacities(capacities, scenario, results_path, timehorizon, re
         capacities.get('wave_rreh', 0),
         capacities.get('battery_flow', 0),
         capacities.get('battery_stock', 0),
+        capacities.get('electrolysis', 0),        
     ]
     
     # Only add the total hydro capacity if there are hydro plants
@@ -355,16 +357,13 @@ def plot_individual_hydro_capacities(hydro_keys, capacities, scenario, img_folde
     plt.close(fig)
 
 def calculate_price_per_mwh(d, tot_cost, scenario, timehorizon):
-    gas = np.array(d.solution.elements.LIQUEFIED_METHANE_REGASIFICATION.variables.methane.values) * 15.31  # kt/h * GWh/kt
-    gas_prod = np.sum(gas)  # GWh
-    demand_in_mwh = gas_prod * 1e3  # Convert GWh to MWh
-    total_cost_in_euros = tot_cost * 1e6  # Convert million euros to euros
+    demand_in_twh = sum(d.solution.elements.LIQUEFIED_METHANE_REGASIFICATION.variables.methane.values) * 0.015441  # kt/h * MWh/kg
 
     # Compute price per MWh in euros
-    price_per_mwh = total_cost_in_euros / demand_in_mwh
+    price_per_mwh = tot_cost / demand_in_twh # M€/GWh <=> €/MWh
     print(f"The price in the scenario {scenario} with the time horizon {timehorizon} is {price_per_mwh:.3f} €/MWh")
 
-    return price_per_mwh, demand_in_mwh
+    return price_per_mwh, demand_in_twh
 
 def cost_rreh_detailed(d, ls):
     detailed_cost = {}
@@ -383,9 +382,9 @@ def cost_rreh_detailed(d, ls):
     
     return detailed_cost
 
-def plot_cost_breakdown(detailed_costs, demand_in_mwh, title, results_path, scenario, timehorizon, wacc_label, source='RREH', report=False):
+def plot_cost_breakdown(detailed_costs, demand_in_twh, title, results_path, scenario, timehorizon, wacc_label, source='RREH', report=False):
     # Convert costs to €/MWh
-    adjusted_costs = {node: cost * 1e6 / demand_in_mwh for node, cost in detailed_costs.items()}
+    adjusted_costs = {node: cost / demand_in_twh for node, cost in detailed_costs.items()}
 
     # Sort nodes and costs
     sorted_nodes_and_costs = sorted(adjusted_costs.items(), key=lambda item: item[1], reverse=True)
@@ -574,7 +573,6 @@ def analyze_and_plot_tech_capacities(scenario, d, results_path, timehorizon, wac
 def calculate_plant_tech_capacities(d):
     plant_capacities = {}
     
-    plant_capacities['electrolysis'] = np.sum(d.solution.elements.ELECTROLYSIS_PLANTS_RREH.variables.capacity.values)
     plant_capacities['dac'] = np.sum(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_RREH.variables.capacity.values)
     plant_capacities['methanation'] = np.sum(d.solution.elements.METHANATION_PLANTS_RREH.variables.capacity.values)
 
@@ -582,9 +580,8 @@ def calculate_plant_tech_capacities(d):
 
 def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizon, wacc_label, report):
     
-    categories = ['Electrolysis ', 'DAC', 'Methanation']
+    categories = ['DAC', 'Methanation']
     capacity_values = [
-        capacities.get('electrolysis', 0),
         capacities.get('dac', 0),
         capacities.get('methanation', 0)
     ]
@@ -651,7 +648,8 @@ class MakeMeReadable:
 
 def analyze_json_files(args):
     
-    scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro', 'hydro_wind', 'combined', 'spain', 'algeria', 'germany']
+    # scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro', 'hydro_wind', 'combined', 'spain', 'algeria', 'germany']
+    scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro_wind', 'combined', 'spain', 'algeria', 'germany']
 
     base_path = 'models'  # Adjust this path as necessary
 
@@ -731,7 +729,7 @@ def analyze_json_files(args):
 
                         # Aggregate plant capacities
                         # Direct mapping for non-hydro capacities
-                        for capacity_type in ["wind_onshore_rreh", "wind_offshore_rreh", "wave_rreh", "solar_rreh", "battery_flow", "battery_stock"]:
+                        for capacity_type in ["wind_onshore_rreh", "wind_offshore_rreh", "wave_rreh", "solar_rreh", "battery_flow", "battery_stock", "Electrolysis"]:
                             aggregated_data[capacity_type].append(plant_capacities.get(capacity_type, "NA"))
 
                         # Handle hydro capacities
@@ -752,10 +750,10 @@ def analyze_json_files(args):
 
                         # Retrieve and plot the installed capacities
                         print(f"Computing the price of {scenario_name} with time horizon {args.timehorizon}")
-                        price_per_mwh, demand_in_mwh = calculate_price_per_mwh(data, tot_cost, scenario_name, args.timehorizon)
+                        price_per_mwh, demand_in_twh = calculate_price_per_mwh(data, tot_cost, scenario_name, args.timehorizon)
 
-                        # Convert demand_in_mwh to demand_in_twh
-                        demand_in_twh = demand_in_mwh / 1e6
+                        # # Convert demand_in_twh to demand_in_twh
+                        # demand_in_twh = demand_in_twh / 1e6
 
                         aggregated_data['price per mwh'].append(price_per_mwh)
                         aggregated_data['demand in twh'].append(demand_in_twh)
@@ -763,9 +761,9 @@ def analyze_json_files(args):
                         # Plot cost breakdown
                         print(f"Plotting the cost breakdown of {scenario_name} with time horizon {args.timehorizon}")                
                         cost_details_RREH = cost_rreh_detailed(data, RREH_nodes)
-                        plot_cost_breakdown(cost_details_RREH, demand_in_mwh, 'Synthetic Methane (RREH) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'RREH' ,args.report)
+                        plot_cost_breakdown(cost_details_RREH, demand_in_twh, 'Synthetic Methane (RREH) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'RREH' ,args.report)
                         cost_details_BE = cost_rreh_detailed(data, BE_nodes)
-                        plot_cost_breakdown(cost_details_BE, demand_in_mwh, 'Synthetic Methane (Belgium) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'BE', args.report)
+                        plot_cost_breakdown(cost_details_BE, demand_in_twh, 'Synthetic Methane (Belgium) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'BE', args.report)
 
                         # Plot energy production dynamic
                         plot_production_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
@@ -781,7 +779,7 @@ def analyze_json_files(args):
                         print(f"Retrieving and plotting installed side tech capacities for {scenario_name} with time horizon {args.timehorizon}")
                         tech_capacities = analyze_and_plot_tech_capacities(scenario_name, data, results_path, args.timehorizon, wacc_label, args.report)
 
-                        for tech_type in ["Electrolysis", "DAC", "Methanation"]:
+                        for tech_type in ["DAC", "Methanation"]:
                             aggregated_data[tech_type].append(tech_capacities.get(tech_type.lower().replace(" ", "_"), "NA"))  # Assuming the keys in tech_capacities are lowercase with underscores
 
         all_data.append(aggregated_data)
@@ -880,10 +878,10 @@ def plot_price_intervals(df, time_horizon, report=False):
         plt.savefig(os.path.join(img_folder_path, 'price_intervals.png'), bbox_inches='tight', format='png')
 
     # Write data to LaTeX table in a .txt file
-    table_data = plot_data.rename(columns={'Scenario': 'Country', 'price per mwh constant': 'WACC constant', 'price per mwh diff': 'WACC differentiated'})[['Country', 'WACC constant', 'WACC differentiated']].reset_index(drop=True)
+    table_data = plot_data.rename(columns={'Scenario': 'Country', 'price per mwh constant': 'Price at WACC constant', 'price per mwh diff': 'Price at WACC differentiated'})[['Country', 'Price at WACC constant', 'Price at WACC differentiated']].reset_index(drop=True)
 
     styled = (table_data.style
-          .format({"WACC constant": "{:.2f}", "WACC differentiated": "{:.2f}"})
+          .format({"Price at WACC constant": "{:.2f}", "Price at WACC differentiated": "{:.2f}"})
           .format_index(escape="latex", axis=0)
           .hide(axis=0))
 
@@ -1044,9 +1042,12 @@ def plot_stacked_bar_costs(df, time_horizon, report=False):
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # Plot the stacked bars with the specified colors
-    rreh_bars = ax.bar(index, cost_data['price_gr'], bar_width, label='Cost GR (€MWh)', color='tab:blue')
+    rreh_bars = ax.bar(index, cost_data['price_gr'], bar_width, label='Cost GR (€MWh)', color='tab:blue', alpha=0.7)
     be_bars = ax.bar(index, cost_data['price_be'], bar_width,
                      bottom=cost_data['price_gr'], label='Cost BE (€MWh)', color='tab:red', alpha=0.7)
+
+    # Add horizontal line
+    ax.axhline(y=156.14, color='darkred', linestyle='--', label='Reference Case')
 
     # Labeling and aesthetics
     ax.set_xlabel('Scenario')
@@ -1065,7 +1066,8 @@ def plot_stacked_bar_costs(df, time_horizon, report=False):
                     ha='center', va='bottom')
 
     fig.legend(loc="upper right", bbox_to_anchor=(1, 1), bbox_transform=ax.transAxes)
-    plt.title('Total Costs per MWh by Scenario')
+    if not report:
+        plt.title('Total Costs per MWh by Scenario')
     fig.tight_layout()
     img_folder_path = f'scripts/results/img/{time_horizon}'
     if not os.path.exists(img_folder_path):
@@ -1080,7 +1082,7 @@ def plot_stacked_bar_costs(df, time_horizon, report=False):
     table_data = cost_data.rename(columns={'Scenario': 'Scenario', 'price_gr': 'Price GR (€/MWh)', 'price_be': 'Price BE (€/MWh)', 'price_mwh': 'Total Price (€/MWh)'})[['Scenario', 'Price GR (€/MWh)', 'Price BE (€/MWh)', 'Total Price (€/MWh)']].reset_index(drop=True)
 
     styled = (table_data.style
-          .format({"Price (€/MWh)": "{:.2f}", "Installed Capacity (GW)": "{:.2f}"})
+          .format({"Price GR (€/MWh)": "{:.2f}", "Price BE (€/MWh)": "{:.2f}", "Total Price (€/MWh)": "{:.2f}"})
           .format_index(escape="latex", axis=0)
           .hide(axis=0))
 
