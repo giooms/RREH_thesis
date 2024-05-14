@@ -60,7 +60,11 @@ def run_scenario(scenario, timehorizon, wacc_case):
     gboml_model.add_nodes_in_model(*nodes)
     gboml_model.add_hyperedges_in_model(*edges)
     gboml_model.build_model()
-    solution, obj, status, solver_info, constr_info, _ = gboml_model.solve_gurobi(opt_file="scripts/analysis/gurobi.txt")
+    if scenario == "hydro": # Crossover disabled to avoid 'Out of Memory' error
+        solution, obj, status, solver_info, constr_info, _ = gboml_model.solve_gurobi(opt_file="scripts/analysis/gurobi1.txt")
+    else: 
+        solution, obj, status, solver_info, constr_info, _ = gboml_model.solve_gurobi(opt_file="scripts/analysis/gurobi2.txt")
+
 
     gathered_data = gboml_model.turn_solution_to_dictionary(solver_info, status, solution, obj, constr_info)
     results_dir_path = os.path.join("models", scenario, "results")

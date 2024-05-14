@@ -64,7 +64,7 @@
         storage[0] == storage[T-1];
         storage[t] <= max_storage;
         storage[t] >= min_storage;
-        release[t] + spill[t] <= inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
+        release[t] + spill[t] <= 10 * inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
         release[t] >= 0;
         spill[t] >= 0;
     // #OBJECTIVES
@@ -82,7 +82,7 @@
         fom = 40; // MEur/year
         vom = 0.003; // MEur/GWh
         efficiency = 0.87;
-        max_capacity = 2; // GW, hydropower resource 2005 * 50
+        max_capacity = 4; // GW, hydropower resource 2005 * 100
     #VARIABLES
         internal: capacity;
         external: electricity[T];
@@ -115,7 +115,7 @@
         //storage[t+1] == storage[t] + inflow_series[t+1] - release[t+1] - spill[t+1] - (evaporation_rate * area * 1e6 / 24);
         storage[t] <= max_storage;
         storage[t] >= min_storage;
-        release[t] + spill[t] <= inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
+        release[t] + spill[t] <= 10 * inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
         // release[t] <= 4.95 / 0.87;
         release[t] >= 0;
         spill[t] >= 0;
@@ -134,7 +134,7 @@
         fom = 40; // MEur/year
         vom = 0.003; // MEur/GWh
         efficiency = 0.87;
-        max_capacity = 4.95; // GW, hydropower resource 2005 * 50
+        max_capacity = 9.9; // GW, hydropower resource 2005 * 100
     #VARIABLES
         internal: capacity;
         external: electricity[T];
@@ -167,7 +167,7 @@
         //storage[t+1] == storage[t] + inflow_series[t+1] - release[t+1] - spill[t+1] - (evaporation_rate * area * 1e6 / 24);
         storage[t] <= max_storage;
         storage[t] >= min_storage;
-        release[t] + spill[t] <= inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
+        release[t] + spill[t] <= 10 * inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
         release[t] >= 0;
         spill[t] >= 0;
     // #OBJECTIVES
@@ -185,7 +185,7 @@
         fom = 40; // MEur/year
         vom = 0.003; // MEur/GWh
         efficiency = 0.87;
-        max_capacity = 2.9; // GW, hydropower resource 2005 * 50
+        max_capacity = 5.8; // GW, hydropower resource 2005 * 100
     #VARIABLES
         internal: capacity;
         external: electricity[T];

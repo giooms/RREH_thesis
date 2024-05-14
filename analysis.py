@@ -435,6 +435,7 @@ def plot_production_dynamics(d, results_path, scenario, timehorizon, wacc_label,
     # Determine which production types to include based on the scenario
     production_types_mapping = {
         'combined': ['OFF_WIND_PLANTS_RREH', 'ON_WIND_PLANTS_RREH', 'HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH', 'WAVE_PLANT_RREH'],
+        'hydro_wind': ['OFF_WIND_PLANTS_RREH', 'ON_WIND_PLANTS_RREH', 'HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH'],
         'wind_onshore': ['ON_WIND_PLANTS_RREH'],
         'wind_offshore': ['OFF_WIND_PLANTS_RREH'],
         'hydro': ['HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH'],
@@ -485,7 +486,7 @@ def plot_production_dynamics(d, results_path, scenario, timehorizon, wacc_label,
     plt.close(fig)
 
 def plot_basin_dynamics(d, results_path, scenario, timehorizon, wacc_label, start_date='2015-01-01'):
-    if scenario not in ['hydro', 'combined']:
+    if scenario not in ['hydro', 'hydro_wind', 'combined']:
         return  # Only proceed if the correct scenario
 
     ls_nodes = list(d.model.nodes.keys())
@@ -528,7 +529,7 @@ def plot_basin_dynamics(d, results_path, scenario, timehorizon, wacc_label, star
         plt.close(fig)
 
 def plot_storage_dynamics(d, results_path, scenario, timehorizon, wacc_label, start_date='2015-01-01'):
-    date_range = pd.date_range(start=start_date, periods=17544, freq='H')
+    date_range = pd.date_range(start=start_date, periods=timehorizon, freq='H')
 
     battery_data = np.array(d.solution.elements.BATTERY_STORAGE_RREH.variables.electricity_stored.values)
     hydrogen_data = np.array(d.solution.elements.HYDROGEN_STORAGE_RREH.variables.hydrogen_stored.values)
@@ -648,9 +649,8 @@ class MakeMeReadable:
 
 def analyze_json_files(args):
     
-    # scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro', 'hydro_wind', 'combined', 'spain', 'algeria', 'germany']
-    scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro_wind', 'combined', 'spain', 'algeria', 'germany']
-
+    scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro', 'hydro_wind', 'combined', 'spain', 'algeria', 'germany']
+    
     base_path = 'models'  # Adjust this path as necessary
 
     csv_path = f'scripts/results/scenario_analysis_results_{args.timehorizon}.csv'
@@ -702,85 +702,85 @@ def analyze_json_files(args):
                             print(f"File path: {file_path}")
                             data = load_results(file_path)
                 
-                        # Split the filename on the underscores
-                        parts = file_name.split('_')
-                        # Remove the part that is just digits and the 'results.json' part
-                        scenario_parts = [part for part in parts if not part.isdigit() and not part.endswith('.json')]
-                        # Join the remaining parts back together to get the scenario name
-                        scenario_name = '_'.join(scenario_parts)
+                            # Split the filename on the underscores
+                            parts = file_name.split('_')
+                            # Remove the part that is just digits and the 'results.json' part
+                            scenario_parts = [part for part in parts if not part.isdigit() and not part.endswith('.json')]
+                            # Join the remaining parts back together to get the scenario name
+                            scenario_name = '_'.join(scenario_parts)
 
-                        aggregated_data['scenario'].append(scenario_name)
+                            aggregated_data['scenario'].append(scenario_name)
 
-                        # Initial check
-                        print(f"Plot of balances for {scenario_name} with time horizon {args.timehorizon}")
-                        compute_and_plot_balances(scenario_name, data, results_path, args.timehorizon, wacc_label)
+                            # Initial check
+                            print(f"Plot of balances for {scenario_name} with time horizon {args.timehorizon}")
+                            compute_and_plot_balances(scenario_name, data, results_path, args.timehorizon, wacc_label)
 
-                        # Compute total costs
-                        print(f"Computing total costs for {scenario_name} with time horizon {args.timehorizon}")
-                        RREH_nodes, BE_nodes, cost_RREH, cost_BE, tot_cost = analyze_system_costs(data)
+                            # Compute total costs
+                            print(f"Computing total costs for {scenario_name} with time horizon {args.timehorizon}")
+                            RREH_nodes, BE_nodes, cost_RREH, cost_BE, tot_cost = analyze_system_costs(data)
 
-                        aggregated_data['total cost'].append(tot_cost)
-                        aggregated_data['total cost_rreh'].append(cost_RREH)
-                        aggregated_data['total cost_be'].append(cost_BE)
+                            aggregated_data['total cost'].append(tot_cost)
+                            aggregated_data['total cost_rreh'].append(cost_RREH)
+                            aggregated_data['total cost_be'].append(cost_BE)
 
-                        # Retrieve and plot the installed renewable capacities
-                        print(f"Retrieving and plotting installed capacities for {scenario_name} with time horizon {args.timehorizon}")
-                        plant_capacities = analyze_and_plot_capacities(scenario_name, data, results_path, args.timehorizon, wacc_label, args.report)
+                            # Retrieve and plot the installed renewable capacities
+                            print(f"Retrieving and plotting installed capacities for {scenario_name} with time horizon {args.timehorizon}")
+                            plant_capacities = analyze_and_plot_capacities(scenario_name, data, results_path, args.timehorizon, wacc_label, args.report)
 
-                        # Aggregate plant capacities
-                        # Direct mapping for non-hydro capacities
-                        for capacity_type in ["wind_onshore_rreh", "wind_offshore_rreh", "wave_rreh", "solar_rreh", "battery_flow", "battery_stock", "Electrolysis"]:
-                            aggregated_data[capacity_type].append(plant_capacities.get(capacity_type, "NA"))
+                            # Aggregate plant capacities
+                            # Direct mapping for non-hydro capacities
+                            for capacity_type in ["wind_onshore_rreh", "wind_offshore_rreh", "wave_rreh", "solar_rreh", "battery_flow", "battery_stock", "Electrolysis"]:
+                                aggregated_data[capacity_type].append(plant_capacities.get(capacity_type, "NA"))
 
-                        # Handle hydro capacities
-                        # Adapt these keys based on how they're actually named in your returned 'plant_capacities'
-                        hydro_mappings = {
-                            "HYDRO_PLANT_03h_RREH": "hydro_3h_rreh",
-                            "HYDRO_PLANT_03j_RREH": "hydro_3j_rreh",
-                            "HYDRO_PLANT_05h_RREH": "hydro_5h_rreh",
-                        }
-                        hydro_rreh_sum = 0
-                        for original_key, new_key in hydro_mappings.items():
-                            # Use 'NA' if not found
-                            capacity = plant_capacities.get(original_key, "NA")
-                            aggregated_data[new_key].append(capacity)
-                            if isinstance(capacity, (int, float)):
-                                hydro_rreh_sum += capacity
-                        aggregated_data['hydro_rreh'].append(hydro_rreh_sum)
+                            # Handle hydro capacities
+                            # Adapt these keys based on how they're actually named in your returned 'plant_capacities'
+                            hydro_mappings = {
+                                "HYDRO_PLANT_03h_RREH": "hydro_3h_rreh",
+                                "HYDRO_PLANT_03j_RREH": "hydro_3j_rreh",
+                                "HYDRO_PLANT_05h_RREH": "hydro_5h_rreh",
+                            }
+                            hydro_rreh_sum = 0
+                            for original_key, new_key in hydro_mappings.items():
+                                # Use 'NA' if not found
+                                capacity = plant_capacities.get(original_key, "NA")
+                                aggregated_data[new_key].append(capacity)
+                                if isinstance(capacity, (int, float)):
+                                    hydro_rreh_sum += capacity
+                            aggregated_data['hydro_rreh'].append(hydro_rreh_sum)
 
-                        # Retrieve and plot the installed capacities
-                        print(f"Computing the price of {scenario_name} with time horizon {args.timehorizon}")
-                        price_per_mwh, demand_in_twh = calculate_price_per_mwh(data, tot_cost, scenario_name, args.timehorizon)
+                            # Retrieve and plot the installed capacities
+                            print(f"Computing the price of {scenario_name} with time horizon {args.timehorizon}")
+                            price_per_mwh, demand_in_twh = calculate_price_per_mwh(data, tot_cost, scenario_name, args.timehorizon)
 
-                        # # Convert demand_in_twh to demand_in_twh
-                        # demand_in_twh = demand_in_twh / 1e6
+                            # # Convert demand_in_twh to demand_in_twh
+                            # demand_in_twh = demand_in_twh / 1e6
 
-                        aggregated_data['price per mwh'].append(price_per_mwh)
-                        aggregated_data['demand in twh'].append(demand_in_twh)
-                        
-                        # Plot cost breakdown
-                        print(f"Plotting the cost breakdown of {scenario_name} with time horizon {args.timehorizon}")                
-                        cost_details_RREH = cost_rreh_detailed(data, RREH_nodes)
-                        plot_cost_breakdown(cost_details_RREH, demand_in_twh, 'Synthetic Methane (RREH) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'RREH' ,args.report)
-                        cost_details_BE = cost_rreh_detailed(data, BE_nodes)
-                        plot_cost_breakdown(cost_details_BE, demand_in_twh, 'Synthetic Methane (Belgium) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'BE', args.report)
+                            aggregated_data['price per mwh'].append(price_per_mwh)
+                            aggregated_data['demand in twh'].append(demand_in_twh)
+                            
+                            # Plot cost breakdown
+                            print(f"Plotting the cost breakdown of {scenario_name} with time horizon {args.timehorizon}")                
+                            cost_details_RREH = cost_rreh_detailed(data, RREH_nodes)
+                            plot_cost_breakdown(cost_details_RREH, demand_in_twh, 'Synthetic Methane (RREH) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'RREH' ,args.report)
+                            cost_details_BE = cost_rreh_detailed(data, BE_nodes)
+                            plot_cost_breakdown(cost_details_BE, demand_in_twh, 'Synthetic Methane (Belgium) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'BE', args.report)
 
-                        # Plot energy production dynamic
-                        plot_production_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
-                        
-                        # Plot basins dynamic
-                        if scenario in ['hydro', 'combined']:
-                            plot_basin_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
+                            # Plot energy production dynamic
+                            plot_production_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
+                            
+                            # Plot basins dynamic
+                            if scenario in ['hydro', 'hydro_wind', 'combined']:
+                                plot_basin_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
 
-                        # Plot storage dynamic
-                        plot_storage_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
+                            # Plot storage dynamic
+                            plot_storage_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
 
-                        # Retrieve and plot the installed side techs capacities
-                        print(f"Retrieving and plotting installed side tech capacities for {scenario_name} with time horizon {args.timehorizon}")
-                        tech_capacities = analyze_and_plot_tech_capacities(scenario_name, data, results_path, args.timehorizon, wacc_label, args.report)
+                            # Retrieve and plot the installed side techs capacities
+                            print(f"Retrieving and plotting installed side tech capacities for {scenario_name} with time horizon {args.timehorizon}")
+                            tech_capacities = analyze_and_plot_tech_capacities(scenario_name, data, results_path, args.timehorizon, wacc_label, args.report)
 
-                        for tech_type in ["DAC", "Methanation"]:
-                            aggregated_data[tech_type].append(tech_capacities.get(tech_type.lower().replace(" ", "_"), "NA"))  # Assuming the keys in tech_capacities are lowercase with underscores
+                            for tech_type in ["DAC", "Methanation"]:
+                                aggregated_data[tech_type].append(tech_capacities.get(tech_type.lower().replace(" ", "_"), "NA"))  # Assuming the keys in tech_capacities are lowercase with underscores
 
         all_data.append(aggregated_data)
 
@@ -1007,7 +1007,7 @@ def plot_stacked_bar_costs(df, time_horizon, report=False):
     exclude_scenarios = ['spain', 'germany', 'algeria']
 
     # Prepare the total cost data
-    demand_in_twh = 12.970272171668919
+    demand_in_twh = round(int(time_horizon) / 8760 * 10)
 
     # Retrieve cost_rreh and cost_be with prepare_plot_data
     cost_rreh = prepare_plot_data(df, 'total cost_rreh')
@@ -1047,7 +1047,7 @@ def plot_stacked_bar_costs(df, time_horizon, report=False):
                      bottom=cost_data['price_gr'], label='Cost BE (€MWh)', color='tab:red', alpha=0.7)
 
     # Add horizontal line
-    ax.axhline(y=156.14, color='darkred', linestyle='--', label='Reference Case')
+    ax.axhline(y=154.82, color='darkred', linestyle='--', label='Reference Case')
 
     # Labeling and aesthetics
     ax.set_xlabel('Scenario')
