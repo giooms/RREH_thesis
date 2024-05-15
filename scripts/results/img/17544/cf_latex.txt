@@ -1,0 +1,15 @@
+
+\begin{table}
+\centering
+\begin{tabular}{lrlll}
+\toprule
+Country & Onshore Wind Turbines & Offshore Wind Turbines & Solar PV & Hydropower \\
+\midrule
+greenland & 0.566117 & 0.589469 & NA & 0.734862 \\
+spain & 0.273278 & NA & 0.169152 & NA \\
+algeria & 0.505029 & NA & 0.244306 & NA \\
+germany & 0.195813 & NA & 0.117034 & NA \\
+\bottomrule
+\end{tabular}
+\end{table}
+

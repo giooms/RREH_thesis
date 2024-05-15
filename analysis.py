@@ -234,31 +234,40 @@ def analyze_and_plot_capacities(scenario, d, results_path, timehorizon, wacc_lab
 def calculate_plant_capacities(d):
     plant_capacities = {}
 
-    # Dynamically calculate capacities based on available data in 'd'
-    if hasattr(d.solution.elements, "ON_WIND_PLANTS_RREH"):
-        plant_capacities['wind_onshore_rreh'] = np.sum(d.solution.elements.ON_WIND_PLANTS_RREH.variables.capacity.values)
-    if hasattr(d.solution.elements, "OFF_WIND_PLANTS_RREH"):
-        plant_capacities['wind_offshore_rreh'] = np.sum(d.solution.elements.OFF_WIND_PLANTS_RREH.variables.capacity.values)
-    if hasattr(d.solution.elements, "SOLAR_PV_PLANTS_RREH"):
-        plant_capacities['solar_rreh'] = np.sum(d.solution.elements.SOLAR_PV_PLANTS_RREH.variables.capacity.values)
     if hasattr(d.solution.elements, "WAVE_PLANT_RREH"):
         wave_units = d.solution.elements.WAVE_PLANT_RREH.variables.num_units.values[0]
         wave_rp = d.model.nodes.WAVE_PLANT_RREH.parameters.unit_rated_power[0]
-        plant_capacities['wave_rreh'] = wave_units * wave_rp
+        plant_capacities['WAVE_PLANT_RREH'] = wave_units * wave_rp
 
-    # Adding hydro plant capacities
+    # Dynamically calculate capacities based on available data in 'd'
     ls_nodes = list(d.model.nodes.keys())
+    excluded_elements = ['WAVE_PLANT_RREH']
+    
     for element_name in ls_nodes:
-        if re.match(r'HYDRO_PLANT_\w+_RREH$', element_name):
+        if element_name not in excluded_elements:
             element = getattr(d.solution.elements, element_name, None)
             if element is not None and hasattr(element, 'variables'):
-                capacity_values = element.variables.capacity.values
+                capacity_values = None
+                capacity_stock_values = None
+                capacity_flow_values = None
+
+                try:
+                    capacity_values = element.variables.capacity.values
+                except AttributeError:
+                    pass
+
+                if capacity_values is None:
+                    try:
+                        capacity_stock_values = element.variables.capacity_stock.values
+                        capacity_flow_values = element.variables.capacity_flow.values
+                    except AttributeError:
+                        pass
+                
                 if capacity_values:
                     plant_capacities[element_name] = np.sum(capacity_values)
-
-    plant_capacities['battery_flow'] = np.sum(d.solution.elements.BATTERY_STORAGE_RREH.variables.capacity_flow.values)
-    plant_capacities['battery_stock'] = np.sum(d.solution.elements.BATTERY_STORAGE_RREH.variables.capacity_stock.values)
-    plant_capacities['electrolysis'] = np.sum(d.solution.elements.ELECTROLYSIS_PLANTS_RREH.variables.capacity.values)
+                elif capacity_stock_values and capacity_flow_values:
+                    plant_capacities[element_name+'_stock'] = np.sum(capacity_stock_values)
+                    plant_capacities[element_name+'_flow'] = np.sum(capacity_flow_values)
 
     return plant_capacities
 
@@ -269,13 +278,13 @@ def plot_and_save_capacities(capacities, scenario, results_path, timehorizon, re
     
     categories = ['Onshore Wind', 'Offshore Wind', 'Solar', 'Wave', 'Battery Flow', 'Battery Stock', 'Electrolysis']
     capacity_values = [
-        capacities.get('wind_onshore_rreh', 0),
-        capacities.get('wind_offshore_rreh', 0),
-        capacities.get('solar_rreh',0),
-        capacities.get('wave_rreh', 0),
-        capacities.get('battery_flow', 0),
-        capacities.get('battery_stock', 0),
-        capacities.get('electrolysis', 0),        
+        capacities.get('ON_WIND_PLANTS_RREH', 0),
+        capacities.get('OFF_WIND_PLANTS_RREH', 0),
+        capacities.get('SOLAR_PV_PLANTS_RREH',0),
+        capacities.get('WAVE_PLANT_RREH', 0),
+        capacities.get('BATTERY_STORAGE_flow', 0),
+        capacities.get('BATTERY_STORAGE_stock', 0),
+        capacities.get('ELECTROLYSIS_PLANTS', 0),        
     ]
     
     # Only add the total hydro capacity if there are hydro plants
@@ -429,7 +438,7 @@ def plot_cost_breakdown(detailed_costs, demand_in_twh, title, results_path, scen
     fig.savefig(cost_breakdown_fig_path)
     plt.close(fig)  # Close the plot to release memory
 
-def plot_production_dynamics(d, results_path, scenario, timehorizon, wacc_label, start_date='2015-01-01'):
+def plot_production_dynamics(d, plant_capacities, results_path, scenario, timehorizon, wacc_label, start_date='2015-01-01'):
     production_data = {}
 
     # Determine which production types to include based on the scenario
@@ -466,8 +475,8 @@ def plot_production_dynamics(d, results_path, scenario, timehorizon, wacc_label,
     else:
         colors = plt.cm.viridis(np.linspace(0, 1, num_plots))
 
-    for ax, ((production_type, production_data), color) in zip(axs, zip(production_data.items(), colors)):
-        data_series = pd.Series(production_data).rolling(window=24).mean()
+    for ax, ((production_type, production_array), color) in zip(axs, zip(production_data.items(), colors)):
+        data_series = pd.Series(production_array).rolling(window=24).mean()
         if data_series.max() < 0.001:
             ax.axhline(y=0, color='k', linestyle='--')
             ax.set_ylim(-0.1, 0.1)
@@ -484,6 +493,16 @@ def plot_production_dynamics(d, results_path, scenario, timehorizon, wacc_label,
     production_fig_path = os.path.join(img_folder_path, f"{scenario}_production_dynamics.png")
     fig.savefig(production_fig_path)
     plt.close(fig)
+
+    production_data_normalized = {}
+
+    for production_type, data in production_data.items():
+        capacity = plant_capacities.get(production_type, 0)
+        total_production = sum(data)
+        normalized_production = total_production / (capacity * timehorizon)
+        production_data_normalized[production_type] = normalized_production
+
+    return production_data_normalized
 
 def plot_basin_dynamics(d, results_path, scenario, timehorizon, wacc_label, start_date='2015-01-01'):
     if scenario not in ['hydro', 'hydro_wind', 'combined']:
@@ -565,66 +584,6 @@ def plot_storage_dynamics(d, results_path, scenario, timehorizon, wacc_label, st
     fig.savefig(storage_dynamics_fig_path)
     plt.close(fig)
 
-def analyze_and_plot_tech_capacities(scenario, d, results_path, timehorizon, wacc_label, report=False):
-    plant_capacities = calculate_plant_tech_capacities(d)
-    plot_and_save_tech_capacities(plant_capacities, scenario, results_path, timehorizon, wacc_label, report)
-    
-    return plant_capacities
-
-def calculate_plant_tech_capacities(d):
-    plant_capacities = {}
-    
-    plant_capacities['dac'] = np.sum(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_RREH.variables.capacity.values)
-    plant_capacities['methanation'] = np.sum(d.solution.elements.METHANATION_PLANTS_RREH.variables.capacity.values)
-
-    return plant_capacities
-
-def plot_and_save_tech_capacities(capacities, scenario, results_path, timehorizon, wacc_label, report):
-    
-    categories = ['DAC', 'Methanation']
-    capacity_values = [
-        capacities.get('dac', 0),
-        capacities.get('methanation', 0)
-    ]
-    
-    color = [plt.cm.viridis(0)]
-
-    # Setup the plot
-    fig, ax = plt.subplots(figsize=(10, 6))
-    bars = ax.bar(categories, capacity_values, color=color)
-    
-    ax.set_ylabel('Installed Capacity (kt/h)')
-    ax.set_title(f'Installed Tech Capacities for {scenario.capitalize()} Scenario')
-    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-    
-    # Adjust y-axis to fit the labels
-    ax.set_ylim(0, max(capacity_values) * 1.2)
-    
-    # Add labels above the bars
-    for bar in bars:
-        height = bar.get_height()
-        ax.annotate(f'{height:.3f} kt/h',
-                    xy=(bar.get_x() + bar.get_width() / 2, height),
-                    xytext=(0, 3),  # 3 points vertical offset
-                    textcoords='offset points',
-                    ha='center', va='bottom')
-
-    # Save the general capacities plot
-    img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
-    img_folder_path = os.path.join(results_path, img_folder_name)
-    if not os.path.exists(img_folder_path):
-        os.makedirs(img_folder_path)
-    
-    if report:
-        ax.set_title('')
-        general_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_tech_capacities.png")
-    else: 
-        ax.set_title(f'Installed Tech Capacities for {scenario.capitalize()} Scenario')
-        general_cap_fig_path = os.path.join(img_folder_path, f"{scenario}_tech_capacities.png")
-
-    fig.savefig(general_cap_fig_path)
-    plt.close(fig)
-
 class MakeMeReadable:
     def __init__(self, d):
         self.d = d
@@ -650,7 +609,7 @@ class MakeMeReadable:
 def analyze_json_files(args):
     
     scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro', 'hydro_wind', 'combined', 'spain', 'algeria', 'germany']
-    
+
     base_path = 'models'  # Adjust this path as necessary
 
     csv_path = f'scripts/results/scenario_analysis_results_{args.timehorizon}.csv'
@@ -659,28 +618,29 @@ def analyze_json_files(args):
         os.remove(csv_path)
 
     all_data = []
-
+    
+    capacity_factors_df = pd.DataFrame(columns=['Country', 'Onshore Wind Turbines', 'Offshore Wind Turbines', 'Solar PV', 'Hydropower'])
+    
     for scenario in scenarios:
         aggregated_data = {
             "scenario": [],
-            "wind_onshore_rreh": [],
-            "wind_offshore_rreh": [],
-            "solar_rreh": [],
-            "wave_rreh": [],
-            "hydro_3h_rreh": [],
-            "hydro_3j_rreh": [],
-            "hydro_5h_rreh": [],
+            "ON_WIND_PLANTS_RREH": [],
+            "OFF_WIND_PLANTS_RREH": [],
+            "SOLAR_PV_PLANTS_RREH": [],
+            "WAVE_PLANT_RREH": [],
+            "HYDRO_PLANT_03h_RREH": [],
+            "HYDRO_PLANT_03j_RREH": [],
+            "HYDRO_PLANT_05h_RREH": [],
             "hydro_rreh": [],
-            "battery_flow": [],
-            "battery_stock": [],
-            "Electrolysis": [],
-            "DAC": [],
-            "Methanation": [],
+            "BATTERY_STORAGE_flow": [],
+            "BATTERY_STORAGE_stock": [],
+            "ELECTROLYSIS_PLANTS": [],
             "price per mwh": [],
             "total cost": [],
             "total cost_rreh": [],
             "total cost_be": [],
-            "demand in twh": []
+            "demand in twh": [],
+            "other capacities": []
         }
 
         results_path = os.path.join(base_path, scenario, 'results')
@@ -702,8 +662,6 @@ def analyze_json_files(args):
                             print(f"File path: {file_path}")
                             data = load_results(file_path)
                 
-                            # Split the filename on the underscores
-                            parts = file_name.split('_')
                             # Remove the part that is just digits and the 'results.json' part
                             scenario_parts = [part for part in parts if not part.isdigit() and not part.endswith('.json')]
                             # Join the remaining parts back together to get the scenario name
@@ -729,24 +687,24 @@ def analyze_json_files(args):
 
                             # Aggregate plant capacities
                             # Direct mapping for non-hydro capacities
-                            for capacity_type in ["wind_onshore_rreh", "wind_offshore_rreh", "wave_rreh", "solar_rreh", "battery_flow", "battery_stock", "Electrolysis"]:
+                            for capacity_type in ["ON_WIND_PLANTS_RREH", "OFF_WIND_PLANTS_RREH", "WAVE_PLANT_RREH", "SOLAR_PV_PLANTS_RREH", "BATTERY_STORAGE_flow", "BATTERY_STORAGE_stock", "ELECTROLYSIS_PLANTS"]:
                                 aggregated_data[capacity_type].append(plant_capacities.get(capacity_type, "NA"))
 
                             # Handle hydro capacities
-                            # Adapt these keys based on how they're actually named in your returned 'plant_capacities'
-                            hydro_mappings = {
-                                "HYDRO_PLANT_03h_RREH": "hydro_3h_rreh",
-                                "HYDRO_PLANT_03j_RREH": "hydro_3j_rreh",
-                                "HYDRO_PLANT_05h_RREH": "hydro_5h_rreh",
-                            }
                             hydro_rreh_sum = 0
-                            for original_key, new_key in hydro_mappings.items():
-                                # Use 'NA' if not found
-                                capacity = plant_capacities.get(original_key, "NA")
-                                aggregated_data[new_key].append(capacity)
+                            for capacity_type in ["HYDRO_PLANT_03h_RREH", "HYDRO_PLANT_03j_RREH", "HYDRO_PLANT_05h_RREH"]:
+                                capacity = plant_capacities.get(capacity_type, "NA")
+                                aggregated_data[capacity_type].append(capacity)
                                 if isinstance(capacity, (int, float)):
                                     hydro_rreh_sum += capacity
                             aggregated_data['hydro_rreh'].append(hydro_rreh_sum)
+
+                            # Append other capacities
+                            other_capacities = []
+                            for capacity, value in plant_capacities.items():
+                                if capacity not in aggregated_data.keys():
+                                    other_capacities.append((capacity, value))
+                            aggregated_data['other capacities'].append(other_capacities)
 
                             # Retrieve and plot the installed capacities
                             print(f"Computing the price of {scenario_name} with time horizon {args.timehorizon}")
@@ -764,9 +722,6 @@ def analyze_json_files(args):
                             plot_cost_breakdown(cost_details_RREH, demand_in_twh, 'Synthetic Methane (RREH) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'RREH' ,args.report)
                             cost_details_BE = cost_rreh_detailed(data, BE_nodes)
                             plot_cost_breakdown(cost_details_BE, demand_in_twh, 'Synthetic Methane (Belgium) Cost Breakdown (€/MWh)', results_path, scenario_name, args.timehorizon, wacc_label, 'BE', args.report)
-
-                            # Plot energy production dynamic
-                            plot_production_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
                             
                             # Plot basins dynamic
                             if scenario in ['hydro', 'hydro_wind', 'combined']:
@@ -775,19 +730,59 @@ def analyze_json_files(args):
                             # Plot storage dynamic
                             plot_storage_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
 
-                            # Retrieve and plot the installed side techs capacities
-                            print(f"Retrieving and plotting installed side tech capacities for {scenario_name} with time horizon {args.timehorizon}")
-                            tech_capacities = analyze_and_plot_tech_capacities(scenario_name, data, results_path, args.timehorizon, wacc_label, args.report)
+                            # Plot energy production dynamic
+                            capacity_factors = plot_production_dynamics(data, plant_capacities, results_path, scenario_name, args.timehorizon, wacc_label)
 
-                            for tech_type in ["DAC", "Methanation"]:
-                                aggregated_data[tech_type].append(tech_capacities.get(tech_type.lower().replace(" ", "_"), "NA"))  # Assuming the keys in tech_capacities are lowercase with underscores
+                            hydropower_values = [capacity_factors.get('HYDRO_PLANT_03h_RREH', 'NA'), capacity_factors.get('HYDRO_PLANT_03j_RREH', 'NA'), capacity_factors.get('HYDRO_PLANT_05h_RREH', 'NA')]
+                            if any(value != 'NA' for value in hydropower_values):
+                                hydropower_sum = sum(float(value) if value != 'NA' else 0 for value in hydropower_values)
+                                hydropower_avg = hydropower_sum / 3
+                            else:
+                                hydropower_avg = 'NA'
 
+                            if scenario in ['hydro_wind', 'germany', 'algeria', 'spain'] and wacc_label == 'constant':
+                                new_row = pd.DataFrame({
+                                    'Country': ['greenland' if scenario == 'hydro_wind' else scenario],
+                                    'Onshore Wind Turbines': [capacity_factors.get('ON_WIND_PLANTS_RREH', 'NA')],
+                                    'Offshore Wind Turbines': [capacity_factors.get('OFF_WIND_PLANTS_RREH', 'NA')],
+                                    'Solar PV': [capacity_factors.get('SOLAR_PV_PLANTS_RREH', 'NA')],
+                                    'Hydropower': [hydropower_avg]
+                                })
+                                capacity_factors_df = pd.concat([capacity_factors_df, new_row], ignore_index=True)
+
+
+                            
         all_data.append(aggregated_data)
 
         df = pd.DataFrame(all_data)  # Ensuring data is in a list to form a single row
         df.to_csv(csv_path, index=False)
 
         print(f"Data for {scenario} appended to {csv_path}")
+
+    # Check if 'latex.txt' exists in the folder
+    latex_file_path = f'scripts/results/img/{args.timehorizon}/cf_latex.txt'
+    if os.path.exists(latex_file_path):
+        # If it exists, erase its content
+        with open(latex_file_path, 'w') as latex_file:
+            latex_file.write('')
+    else:
+        # If it doesn't exist, create a new file
+        os.makedirs(os.path.dirname(latex_file_path), exist_ok=True)
+        with open(latex_file_path, 'w') as latex_file:
+            pass
+
+    styled = (capacity_factors_df.style
+                .format_index(escape="latex", axis=0)
+                .hide(axis=0))
+
+    # Export the styled DataFrame to LaTeX
+    with open(latex_file_path, 'a') as file:
+        file.write('\n')  # Add a space before
+        styled.to_latex(file, 
+                        position_float='centering',
+                        hrules=True
+        )
+        file.write('\n')  # Add a space after
 
 # =============== ============== ===============
 # ============= CSV FILES ANALYSIS =============
