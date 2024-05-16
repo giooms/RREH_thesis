@@ -1,0 +1,479 @@
+#TIMEHORIZON
+T=43800;  // hours 
+
+#GLOBAL
+wacc = 0.07;
+number_years_horizon = T/8760;
+
+#NODE OFF_WIND_PLANTS_RREH
+    #PARAMETERS
+        full_capex = 1800; // MEur/GW --> source = Denmark 2030
+        lifetime = 30.0;
+        annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+        fom = 39; // MEur/year --> source = Denmark 2030
+        vom = 0.00389; // MEur/GWh --> source = Denmark 2030
+        capacity_factor_off_wind = import "../data/load_factor_woff_GL.csv"; // Dimensionless
+        max_capacity = 1000.0; // GW
+    #VARIABLES
+        internal: capacity;
+        external: electricity[T];
+    #CONSTRAINTS
+        electricity[t] == capacity_factor_off_wind[t] * capacity;
+        capacity <= max_capacity;
+        capacity >= 0;
+        electricity[t] >= 0;
+    #OBJECTIVES
+        min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+        min: vom * electricity[t];
+
+#NODE ON_WIND_PLANTS_RREH
+    #PARAMETERS
+    full_capex = 1110; // in MEur/GW --> source = Denmark 2030
+    lifetime = 30.0;
+    annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+    fom = 13.4; // MEur/year --> source = Denmark 2030
+    vom = 0.00144; // MEur/GWh --> source = Denmark 2030
+    capacity_factor_wind = import "../data/load_factor_won_GL.csv"; // Dimensionless
+    max_capacity = 1000.0; // GW
+    #VARIABLES
+    internal: capacity;
+    external: electricity[T];
+    #CONSTRAINTS
+    electricity[t] == capacity_factor_wind[t] * capacity;
+    capacity <= max_capacity;
+    capacity >= 0;
+    electricity[t] >= 0;
+    #OBJECTIVES
+    min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+    min: vom * electricity[t];
+
+#NODE HYDRO_BASIN_03h_RREH
+    #PARAMETERS
+    // initial_storage = 35.0 * 1e6; // thousands of cubic meters (TCM), yearly average (GEUS report)
+    inflow_series = import "../data/inflow_series_03h.csv"; // TCM/h, historical inflow ../data
+    evaporation_rate = 0.0001; // m per day, specific to basin location
+    area = 25; // km² Report 2005
+    max_storage = 22.5 * 1e3; // (TCM)
+    min_storage = 5.0 * 1e3; // TCM, operational minimum
+    #VARIABLES
+    internal: storage[T];
+    external: release[T]; 
+    external: spill[T];
+    #CONSTRAINTS
+    storage[0] == storage[T-1];
+    //storage[t+1] == storage[t] + inflow_series[t+1] - release[t+1] - spill[t+1] - (evaporation_rate * area * 1e6 / 24);
+    storage[t] <= max_storage;
+    storage[t] >= min_storage;
+    release[t] + spill[t] <= inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
+    release[t] >= 0;
+    spill[t] >= 0;
+    // #OBJECTIVES
+    // min: 0; // Minimize spillage /!\ Ce n'est pas un coût 
+
+#HYPEREDGE BASIN_TO_HYDRO_03h
+    #CONSTRAINTS
+    water_balance: HYDRO_BASIN_03h_RREH.release[t] == HYDRO_PLANT_03h_RREH.release[t];
+
+#NODE HYDRO_PLANT_03h_RREH
+    #PARAMETERS // for >= 50MW
+    full_capex = 1713; // in MEur/GW --> source = IRENA 2000-2021
+    lifetime = 100.0;
+    annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+    fom = 40; // MEur/year
+    vom = 0.003; // MEur/GWh
+    efficiency = 0.87;
+    max_capacity = 0.04; // GW, hydropower resource 2005
+    #VARIABLES
+    internal: capacity;
+    external: electricity[T];
+    external: release[T]; // Release is water released to turbine
+    #CONSTRAINTS
+    electricity[t] == efficiency * release[t];
+    electricity[t] <= capacity;
+    capacity <= max_capacity;
+    capacity >= 0;
+    electricity[t] >= 0;
+    #OBJECTIVES
+    min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+    min: vom * electricity[t];
+
+
+#NODE HYDRO_BASIN_03j_RREH
+    #PARAMETERS
+    // initial_storage = 35.0 * 1e3; // TCM * 1e6 = m³, yearly average (GEUS report)
+    inflow_series = import "../data/inflow_series_03j.csv"; // TCM/h, historical inflow ../data
+    evaporation_rate = 0.0001; // m per day, specific to basin location
+    area = 25; // km² Report 2005
+    max_storage = 58.5 * 1e3; // (TCM)
+    min_storage = 5.0 * 1e3; // TCM, operational minimum
+    #VARIABLES
+    internal: storage[T];
+    external: release[T]; 
+    external: spill[T];
+    #CONSTRAINTS
+    storage[0] == storage[T-1];
+    //storage[t+1] == storage[t] + inflow_series[t+1] - release[t+1] - spill[t+1] - (evaporation_rate * area * 1e6 / 24);
+    storage[t] <= max_storage;
+    storage[t] >= min_storage;
+    release[t] + spill[t] <= inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
+    release[t] >= 0;
+    spill[t] >= 0;
+    // #OBJECTIVES
+    // min: 0; // Minimize spillage /!\ Ce n'est pas un coût 
+
+#HYPEREDGE BASIN_TO_HYDRO_03j_RREH
+    #CONSTRAINTS
+    water_balance: HYDRO_BASIN_03j_RREH.release[t] == HYDRO_PLANT_03j_RREH.release[t];
+
+#NODE HYDRO_PLANT_03j_RREH
+    #PARAMETERS // for >= 50MW
+    full_capex = 1713; // in MEur/GW --> source = IRENA 2000-2021
+    lifetime = 100.0;
+    annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+    fom = 40; // MEur/year
+    vom = 0.003; // MEur/GWh
+    efficiency = 0.87;
+    max_capacity = 0.099; // GW, hydropower resource 2005
+    #VARIABLES
+    internal: capacity;
+    external: electricity[T];
+    external: release[T]; // Release is water released to turbine
+    #CONSTRAINTS
+    electricity[t] == efficiency * release[t];
+    electricity[t] <= capacity;
+    capacity <= max_capacity;
+    capacity >= 0;
+    electricity[t] >= 0;
+    #OBJECTIVES
+    min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+    min: vom * electricity[t];
+
+
+#NODE HYDRO_BASIN_05h_RREH
+    #PARAMETERS
+    // initial_storage = 35.0 * 1e3; // TCM , yearly average (GEUS report)
+    inflow_series = import "../data/inflow_series_05h.csv"; // TCM/h, historical inflow ../data
+    evaporation_rate = 0.0001; // m per day, specific to basin location
+    area = 25; // km² Report 2005
+    max_storage = 35.0 * 1e3; // (TCM)
+    min_storage = 5.0 * 1e3; // TCM, operational minimum
+    #VARIABLES
+    internal: storage[T];
+    external: release[T]; 
+    external: spill[T];
+    #CONSTRAINTS
+    storage[0] == storage[T-1];
+    //storage[t+1] == storage[t] + inflow_series[t+1] - release[t+1] - spill[t+1] - (evaporation_rate * area * 1e6 / 24);
+    storage[t] <= max_storage;
+    storage[t] >= min_storage;
+    release[t] + spill[t] <= inflow_series[t] + storage[t-1] - storage[t]; // doesn't work with evaporation rate.. 
+    release[t] >= 0;
+    spill[t] >= 0;
+    // #OBJECTIVES
+    // min: 0; // Minimize spillage /!\ Ce n'est pas un coût 
+
+#HYPEREDGE BASIN_TO_HYDRO_05h
+    #CONSTRAINTS
+    water_balance: HYDRO_BASIN_05h_RREH.release[t] == HYDRO_PLANT_05h_RREH.release[t];
+
+#NODE HYDRO_PLANT_05h_RREH
+    #PARAMETERS // for >= 50MW
+    full_capex = 1713; // in MEur/GW --> source = IRENA 2000-2021
+    lifetime = 100.0;
+    annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+    fom = 40; // MEur/year
+    vom = 0.003; // MEur/GWh
+    efficiency = 0.87;
+    max_capacity = 0.058; // GW, hydropower resource 2005
+    #VARIABLES
+    internal: capacity;
+    external: electricity[T];
+    external: release[T]; // Release is water released to turbine
+    #CONSTRAINTS
+    electricity[t] == efficiency * release[t];
+    electricity[t] <= capacity;
+    capacity <= max_capacity;
+    capacity >= 0;
+    electricity[t] >= 0;
+    #OBJECTIVES
+    min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+    min: vom * electricity[t];
+
+#NODE BATTERY_STORAGE_RREH
+// Berger et al. 2019 have been used for the node
+#PARAMETERS
+full_capex_stock = 142.0;  // M€/GWh
+full_capex_flow = 160.0;  // M€/GW
+lifetime_stock = 10.0;  // year
+lifetime_flow = 10.0;  // year
+annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // M€
+annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // M€
+fom_stock = 0.0;  // M€/GWh-year
+fom_flow = 0.5;  // M€/GW-year
+vom_stock = 0.0018;  // M€/GWh
+vom_flow = 0.0;  // M€/GWh
+charge_discharge_ratio = 1.0;
+self_discharge = 0.00004;
+efficiency_in = 0.959;
+efficiency_out = 0.959;
+#VARIABLES
+internal: capacity_flow;  //GW
+internal: capacity_stock;  //GWh
+internal: electricity_stored[T]; //GWh
+external: electricity_in[T];  //GWh
+external: electricity_out[T];  //GWh
+#CONSTRAINTS
+electricity_in[t] <= capacity_flow;
+electricity_out[t] <= charge_discharge_ratio * capacity_flow;
+electricity_stored[t] <= capacity_stock;
+electricity_stored[0] == electricity_stored[T-1];
+electricity_stored[t+1] == (1 - self_discharge) * electricity_stored[t] + efficiency_in * electricity_in[t] - electricity_out[t] / efficiency_out;
+capacity_flow >= 0;
+capacity_stock >= 0;
+electricity_stored[t] >= 0;
+electricity_in[t] >= 0;
+electricity_out[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
+min: vom_stock * electricity_stored[t] + vom_flow * electricity_in[t];
+
+#NODE HVDC_RREH
+// Berger et al. 2019 have been used for the node
+#PARAMETERS
+full_capex_lines = 0.25*100;  // M€/GW
+full_capex_stations = 2*115.0;  // M€/GW
+lifetime_lines = 40.0;  // year
+lifetime_stations = 40.0;  // year
+annualised_capex_lines = full_capex_lines * global.wacc * (1 + global.wacc)**lifetime_lines / ((1 + global.wacc)**lifetime_lines - 1); // M€
+annualised_capex_stations = full_capex_stations * global.wacc * (1 + global.wacc)**lifetime_stations / ((1 + global.wacc)**lifetime_stations - 1); // M€
+annualised_capex = annualised_capex_lines + annualised_capex_stations; // M€/GW-year (Lines + Stations)
+fom = 2.5 + 4.6; // M€/year
+vom = 0.0;  // M€/GWh
+efficiency_HVDC = 0.9499;
+#VARIABLES
+internal: capacity;  //GW
+external: electricity_in[T];  //GWh
+external: electricity_out[T];  //GWh
+#CONSTRAINTS
+electricity_in[t] <= capacity;
+electricity_out[t] == efficiency_HVDC * electricity_in[t];
+capacity >= 0;
+electricity_in[t] >= 0;
+electricity_out[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * electricity_in[t];
+
+#NODE ELECTROLYSIS_PLANTS_RREH
+// Berger et al. 2019 have been used for the node
+#PARAMETERS
+full_capex = 600.0;  // M€/GW(e)
+lifetime = 15.0;  // year
+annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // M€
+fom = 30.0; // M€/GW(e)-year
+vom = 0.0; // M€/GWh(e)
+conversion_factor_electricity = 50.6;
+conversion_factor_water = 9.0;
+minimum_level = 0.05;
+#VARIABLES
+internal: capacity; // GW - reference flow for sizing is electricity
+external: electricity[T]; // GWh/h
+external: water[T]; // kt/h
+external: hydrogen[T]; // kt/h
+#CONSTRAINTS
+electricity[t] <= capacity;
+minimum_level * capacity <= electricity[t];
+electricity[t] == conversion_factor_electricity * hydrogen[t];
+water[t] == conversion_factor_water * hydrogen[t];
+capacity >= 0;
+electricity[t] >= 0;
+hydrogen[t] >= 0;
+water[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * electricity[t];
+
+#NODE DESALINATION_PLANTS_RREH
+// Berger et al. 2019 have been used for the node
+#PARAMETERS
+full_capex = 28.08;  // M€/(kt/h) - freshwater is the reference flow for sizing
+lifetime = 20.0; // year
+annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // M€
+fom = 0.0; // M€/year
+vom = 0.000315;  // M€/kt
+conversion_factor_electricity = 0.004;
+minimum_level = 1.0;
+ramp_rate_up = 0.0;
+ramp_rate_down = 0.0;
+#VARIABLES
+internal: capacity; // kt/h 
+external: electricity[T];  // GWh
+external: water[T];  // kt
+#CONSTRAINTS
+water[t] <= capacity;
+minimum_level * capacity <= water[t];
+electricity[t] == conversion_factor_electricity * water[t];
+water[t] <= water[t-1] + ramp_rate_up * capacity;
+water[t-1] <= water[t] + ramp_rate_down * capacity;
+capacity >= 0;
+electricity[t] >= 0;
+water[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * water[t];
+
+#NODE HYDROGEN_STORAGE_RREH
+// Berger et al. 2019 have been used for the node
+#PARAMETERS
+full_capex_stock = 45.0;  // M€/kt
+full_capex_flow = 0.0;  // M€/(kt/h)
+lifetime_stock = 30.0;  // year
+lifetime_flow = 30.0;  // year
+annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // M€
+annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // M€
+fom_stock = 2.25;  // M€/kt-yr  
+fom_flow = 0.0;  
+vom_stock = 0.0;  // M€/kt
+vom_flow = 0.0;   
+conversion_factor_electricity = 1.3;
+minimum_level = 0.05;
+#VARIABLES
+internal: capacity_flow; // kt/h
+internal: capacity_stock;  // kt
+internal: hydrogen_stored[T];  // kt 
+external: electricity[T];  // GWh
+external: hydrogen_in[T]; // kt/h
+external: hydrogen_out[T];  // kt/h
+#CONSTRAINTS
+hydrogen_in[t] <= capacity_flow;
+hydrogen_out[t] <= capacity_flow;
+minimum_level * capacity_stock <= hydrogen_stored[t];
+hydrogen_stored[t] <= capacity_stock;
+hydrogen_stored[0] == hydrogen_stored[T-1];
+hydrogen_stored[t+1] == hydrogen_stored[t] + hydrogen_in[t] - hydrogen_out[t];
+electricity[t] == conversion_factor_electricity * hydrogen_in[t];
+capacity_flow >= 0;
+capacity_stock >= 0;
+hydrogen_stored[t] >= 0;
+hydrogen_in[t] >= 0;
+hydrogen_out[t] >= 0;
+electricity[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
+min: vom_stock * hydrogen_stored[t] + vom_flow * hydrogen_in[t];
+
+#NODE WATER_STORAGE_RREH
+// Berger et al. 2019 have been used for the node
+#PARAMETERS
+full_capex_stock = 0.065;  // M€/kt
+full_capex_flow = 1.55923;  // M€/(kt/h)
+lifetime_stock = 30.0;  // year
+lifetime_flow = 30.0;  // year
+annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // M€
+annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // M€
+fom_stock = 0.0013;  // M€/kt-yr
+fom_flow = 0.0312;  // M€/(kt/h)-yr
+vom_stock = 0.0;  // M€/kt
+vom_flow = 0.0;  // M€/kt
+conversion_factor_electricity = 0.00036;
+#VARIABLES
+internal: capacity_flow;  // kt/h
+internal: capacity_stock;  // kt
+internal: water_stored[T];  // kt
+external: electricity[T];  // GWh
+external: water_in[T];  // kt
+external: water_out[T];  // kt
+#CONSTRAINTS
+water_in[t] <= capacity_flow;
+water_out[t] <= capacity_flow;
+water_stored[t] <= capacity_stock;
+water_stored[0] == water_stored[T-1];
+water_stored[t+1] == water_stored[t] + water_in[t] - water_out[t];
+electricity[t] == conversion_factor_electricity * water_in[t];
+capacity_flow >= 0;
+capacity_stock >= 0;
+water_stored[t] >= 0;
+water_in[t] >= 0;
+water_out[t] >= 0;
+electricity[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
+min: vom_stock * water_stored[t] + vom_flow * water_in[t];
+
+#NODE DIRECT_AIR_CAPTURE_PLANTS_RREH
+// ../data from Keith.D et al, 2018
+#PARAMETERS
+full_capex = 4801.4;  // M€/(kt/h)
+lifetime = 30.0;  // year
+annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+fom = 0.0; // MEur/year
+vom = 0.0207; // MEur/kt
+conversion_factor_electricity = 0.1091;
+conversion_factor_water = 5.0;
+conversion_factor_hydrogen = 1.46 / 33.3; // heat consumption / LHV of hydrogen
+minimum_level = 1.0;
+ramp_rate_up = 0.0;
+ramp_rate_down = 0.0;
+#VARIABLES
+internal: capacity; // kt/h - carbon dioxide is the reference flow for sizing
+external: electricity[T];  // GWh
+external: hydrogen[T]; // kt/h
+external: water[T]; // kt/h
+external: carbon_dioxide[T]; // kt/h
+#CONSTRAINTS
+carbon_dioxide[t] <= capacity;
+minimum_level * capacity <= carbon_dioxide[t];
+electricity[t] == conversion_factor_electricity * carbon_dioxide[t];
+water[t] == conversion_factor_water * carbon_dioxide[t];
+hydrogen[t] == conversion_factor_hydrogen * carbon_dioxide[t];
+carbon_dioxide[t] <= carbon_dioxide[t-1] + ramp_rate_up * capacity;
+carbon_dioxide[t-1] <= carbon_dioxide[t] + ramp_rate_down * capacity;
+capacity >= 0;
+electricity[t] >= 0;
+water[t] >= 0;
+hydrogen[t] >= 0;
+carbon_dioxide[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * carbon_dioxide[t];
+
+#NODE CARBON_DIOXIDE_STORAGE_RREH
+// ../data from Mitsubishi Heavy Industries, 2004
+#PARAMETERS
+full_capex_stock = 1.35;  // M€/kt
+full_capex_flow = 32.4+16.2;  // M€/(kt/h)
+lifetime_stock = 30.0;  // year
+lifetime_flow = 30.0;  // year
+annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // MEur
+annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // MEur
+fom_stock = 0.0675;  // M€/kt-yr
+fom_flow = 1.62 + 0.81; // MEur/(kt/h)-year (carbon dioxide liquefaction + regasification)
+vom_stock = 0.0; // M€/kt
+vom_flow = 0.0;  // M€/kt
+conversion_factor_electricity = 0.105;
+#VARIABLES
+internal: capacity_flow; // kt/h
+internal: capacity_stock; // kt
+internal: carbon_dioxide_stored[T];  //kt
+external: electricity[T];  // GWh
+external: carbon_dioxide_in[T];  // kt/h
+external: carbon_dioxide_out[T];  // kt/h
+#CONSTRAINTS
+carbon_dioxide_in[t] <= capacity_flow;
+carbon_dioxide_out[t] <= capacity_flow;
+carbon_dioxide_stored[t] <= capacity_stock;
+carbon_dioxide_stored[0] == carbon_dioxide_stored[T-1];
+carbon_dioxide_stored[t+1] == carbon_dioxide_stored[t] + carbon_dioxide_in[t] - carbon_dioxide_out[t];
+electricity[t] == conversion_factor_electricity * carbon_dioxide_in[t];
+capacity_flow >= 0;
+capacity_stock >= 0;
+carbon_dioxide_stored[t] >= 0;
+carbon_dioxide_in[t] >= 0;
+carbon_dioxide_out[t] >= 0;
+electricity[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
+min: vom_stock * carbon_dioxide_stored[t] + vom_flow * carbon_dioxide_in[t];
+
+
+

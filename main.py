@@ -17,7 +17,10 @@ SCENARIO_FILES = {
     'combined': 'greenland_combined.gboml',
     'spain': 'spain.gboml',
     'algeria': 'algeria.gboml',
-    'germany': 'germany.gboml'
+    'germany': 'germany.gboml',
+    'ammonia': 'Ammonia.gboml',
+    'hydrogen': 'Hydrogen.gboml',
+    'methanol': 'Methanol.gboml'
 }
 
 def set_wacc_parameters(gboml_model, wacc_case, scenario):
@@ -55,7 +58,8 @@ def run_scenario(scenario, timehorizon, wacc_case):
     nodes, edges, param = gboml_model.import_all_nodes_and_edges(gboml_model_full_path)
     gboml_model.add_global_parameters(param)
 
-    set_wacc_parameters(gboml_model, wacc_case, scenario)
+    if scenario not in ['ammonia', 'hydrogen', 'methanol']:
+        set_wacc_parameters(gboml_model, wacc_case, scenario)
 
     gboml_model.add_nodes_in_model(*nodes)
     gboml_model.add_hyperedges_in_model(*edges)
@@ -89,7 +93,8 @@ def main():
     
     for scenario in scenarios_to_run:
         run_scenario(scenario, args.timehorizon, 'constant')
-        run_scenario(scenario, args.timehorizon, 'diff')
+        if scenario not in ['ammonia', 'hydrogen', 'methanol']:
+            run_scenario(scenario, args.timehorizon, 'diff')
 
 if __name__ == "__main__":
     main()

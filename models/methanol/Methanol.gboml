@@ -1,0 +1,210 @@
+#TIMEHORIZON
+T=43800;
+
+#GLOBAL
+wacc = 0.07;
+number_years_horizon = T/8760;
+
+#NODE OFF_WIND_PLANTS_RREH = import OFF_WIND_PLANTS_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE ON_WIND_PLANTS_RREH = import ON_WIND_PLANTS_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE HYDRO_BASIN_03h_RREH = import HYDRO_BASIN_03h_RREH from "..\..\templates\GENERAL.gboml";
+#HYPEREDGE BASIN_TO_HYDRO_03h
+    #CONSTRAINTS
+    water_balance: HYDRO_BASIN_03h_RREH.release[t] == HYDRO_PLANT_03h_RREH.release[t];
+#NODE HYDRO_PLANT_03h_RREH = import HYDRO_PLANT_03h_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE HYDRO_BASIN_03j_RREH = import HYDRO_BASIN_03j_RREH from "..\..\templates\GENERAL.gboml";
+#HYPEREDGE BASIN_TO_HYDRO_03j_RREH
+    #CONSTRAINTS
+    water_balance: HYDRO_BASIN_03j_RREH.release[t] == HYDRO_PLANT_03j_RREH.release[t];
+#NODE HYDRO_PLANT_03j_RREH = import HYDRO_PLANT_03j_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE HYDRO_BASIN_05h_RREH = import HYDRO_BASIN_05h_RREH from "..\..\templates\GENERAL.gboml";
+#HYPEREDGE BASIN_TO_HYDRO_05h
+    #CONSTRAINTS
+    water_balance: HYDRO_BASIN_05h_RREH.release[t] == HYDRO_PLANT_05h_RREH.release[t];
+#NODE HYDRO_PLANT_05h_RREH = import HYDRO_PLANT_05h_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE BATTERY_STORAGE_RREH = import BATTERY_STORAGE_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE HVDC_RREH = import HVDC_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE ELECTROLYSIS_PLANTS_RREH = import ELECTROLYSIS_PLANTS_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE DESALINATION_PLANTS_RREH = import DESALINATION_PLANTS_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE DIRECT_AIR_CAPTURE_PLANTS_RREH = import DIRECT_AIR_CAPTURE_PLANTS_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE HYDROGEN_STORAGE_RREH = import HYDROGEN_STORAGE_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE CARBON_DIOXIDE_STORAGE_RREH = import CARBON_DIOXIDE_STORAGE_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE WATER_STORAGE_RREH = import WATER_STORAGE_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE METHANOL_PLANTS_RREH
+// Data from ens.dk
+#PARAMETERS
+full_capex = 5752.802; // to obtain cost in MEur/(kt/h)
+lifetime = 30.0;  // year
+annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+fom = 158.311; // M€ Kt/h /y
+vom = 0.0; //M€ /Kt
+conversion_factor_hydrogen = 0.209; // Kt co2/kT METH
+conversion_factor_co2 = 1.37;
+conversion_factor_water = 0.93;
+conversion_factor_elec = 0.1;
+minimum_level = 0.1;
+ramp_rate_up = 1.0;
+ramp_rate_down = 1.0;
+#VARIABLES
+internal: capacity; // kt/h - reference flow for sizing is methane
+external: hydrogen[T]; // kt/h
+external: water[T];  // kt/h
+external: elec[T];  // GWhe
+external: carbon_dioxide[T];  // kt/h
+external: methanol[T];  //kt/h
+#CONSTRAINTS
+methanol[t] <= capacity;
+minimum_level * capacity <= methanol[t];
+hydrogen[t] == conversion_factor_hydrogen * methanol[t];
+water[t] == conversion_factor_water * methanol[t];
+elec[t] == conversion_factor_elec * methanol[t];
+carbon_dioxide[t] == conversion_factor_co2 * methanol[t];
+methanol[t] <= methanol[t-1] + ramp_rate_up * capacity;
+methanol[t-1] <= methanol[t] + ramp_rate_down * capacity;
+capacity >= 0;
+methanol[t] >= 0;
+hydrogen[t] >= 0;
+water[t] >= 0;
+elec[t] >= 0;
+carbon_dioxide[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * methanol[t];
+
+#NODE METHANOL_STORAGE_HUB_RREH
+// Data from ens.dk
+#PARAMETERS
+full_capex_stock = 2.778; // M€/ Kt
+full_capex_flow = 0.0625; // M€/ Kt/h
+lifetime_stock = 30.0; // year
+lifetime_flow = 30.0;  // year
+annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // MEur
+annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // MEur
+fom_stock = 0.0;  // M€/kt-yr
+fom_flow = 0.0; // M€/(kt/h)-yr
+vom_stock = 0.0;  // M€/kt
+vom_flow = 0.0;  // M€/kt
+#VARIABLES
+internal: capacity_flow;  // kt/h
+internal: capacity_stock;  // kt
+internal: liquefied_methanol_stored[T];  // kt
+external: liquefied_methanol_in[T];  // kt/h
+external: liquefied_methanol_out[T];  // kt/h
+#CONSTRAINTS
+liquefied_methanol_in[t] <= capacity_flow;
+liquefied_methanol_out[t] <= capacity_flow;
+liquefied_methanol_stored[t] <= capacity_stock;
+liquefied_methanol_stored[0] == liquefied_methanol_stored[T-1];
+liquefied_methanol_stored[t+1] == liquefied_methanol_stored[t] + liquefied_methanol_in[t] - liquefied_methanol_out[t];
+capacity_flow >= 0;
+capacity_stock >= 0;
+liquefied_methanol_stored[t] >= 0;
+liquefied_methanol_in[t] >= 0;
+liquefied_methanol_out[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
+min: vom_stock * liquefied_methanol_stored[t] + vom_flow * liquefied_methanol_in[t];
+
+#NODE LIQUEFIED_METHANOL_CARRIERS_RREH
+// Data from ens.dk
+#PARAMETERS
+number_carriers = 7;
+full_capex = 0.69; //M€ /Kt
+lifetime = 30.0; // year
+annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+fom = 0.004; // MEur/year
+vom = 0.0;
+schedule = import "../../data/carrier_schedule.csv";
+loading_time = 24;  // hours 
+travel_time = 116;  // hours 
+conversion_factor = 0.9934;
+#VARIABLES
+internal: capacity;  // kt
+external: liquefied_methanol_in[T];  // kt/h
+external: liquefied_methanol_out[T];  // kt/h
+#CONSTRAINTS
+liquefied_methanol_in[t] <= schedule[t] * capacity;
+liquefied_methanol_out[t+travel_time] == conversion_factor * liquefied_methanol_in[t];
+liquefied_methanol_out[t] == 0 where t < travel_time;
+capacity >= 0;
+liquefied_methanol_in[t] >= 0;
+liquefied_methanol_out[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity * loading_time * number_carriers;
+min: vom * liquefied_methanol_in[t];
+
+#NODE METHANOL_STORAGE_DESTINATION_BE
+#PARAMETERS
+full_capex_stock = 2.778; //M€ / Kt
+full_capex_flow = 0.0625;
+lifetime_stock = 30.0;
+lifetime_flow = 30.0;
+annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // MEur
+annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // MEur
+fom_stock = 0.0;
+fom_flow = 0.0;
+vom_stock = 0.0;
+vom_flow = 0.0;
+#VARIABLES
+internal: capacity_flow;
+internal: capacity_stock;
+internal: liquefied_methanol_stored[T];
+external: liquefied_methanol_in[T];
+external: liquefied_methanol_out[T];
+#CONSTRAINTS
+liquefied_methanol_in[t] <= capacity_flow;
+liquefied_methanol_out[t] <= capacity_flow;
+liquefied_methanol_stored[t] <= capacity_stock;
+liquefied_methanol_stored[0] == liquefied_methanol_stored[T-1];
+liquefied_methanol_stored[t+1] == liquefied_methanol_stored[t] + liquefied_methanol_in[t] - liquefied_methanol_out[t];
+capacity_flow >= 0;
+capacity_stock >= 0;
+liquefied_methanol_stored[t] >= 0;
+liquefied_methanol_in[t] >= 0;
+liquefied_methanol_out[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
+min: vom_stock * liquefied_methanol_stored[t] + vom_flow * liquefied_methanol_in[t];
+
+#HYPEREDGE INLAND_POWER_BALANCE
+#CONSTRAINTS
+OFF_WIND_PLANTS_RREH.electricity[t] + ON_WIND_PLANTS_RREH.electricity[t] + HYDRO_PLANT_03h_RREH.electricity[t] + HYDRO_PLANT_03j_RREH.electricity[t] + HYDRO_PLANT_05h_RREH.electricity[t] + BATTERY_STORAGE_RREH.electricity_out[t] == BATTERY_STORAGE_RREH.electricity_in[t] + HVDC_RREH.electricity_in[t];
+
+#HYPEREDGE COASTAL_POWER_BALANCE
+#CONSTRAINTS
+HVDC_RREH.electricity_out[t] == ELECTROLYSIS_PLANTS_RREH.electricity[t] + HYDROGEN_STORAGE_RREH.electricity[t] + DESALINATION_PLANTS_RREH.electricity[t] + WATER_STORAGE_RREH.electricity[t] + DIRECT_AIR_CAPTURE_PLANTS_RREH.electricity[t] + CARBON_DIOXIDE_STORAGE_RREH.electricity[t] + METHANOL_PLANTS_RREH.elec[t];
+
+#HYPEREDGE COASTAL_HYDROGEN_BALANCE
+#CONSTRAINTS
+ELECTROLYSIS_PLANTS_RREH.hydrogen[t] + HYDROGEN_STORAGE_RREH.hydrogen_out[t] == HYDROGEN_STORAGE_RREH.hydrogen_in[t] + DIRECT_AIR_CAPTURE_PLANTS_RREH.hydrogen[t] + METHANOL_PLANTS_RREH.hydrogen[t];
+
+#HYPEREDGE COASTAL_WATER_BALANCE
+#CONSTRAINTS
+DESALINATION_PLANTS_RREH.water[t] + WATER_STORAGE_RREH.water_out[t] + METHANOL_PLANTS_RREH.water[t] == WATER_STORAGE_RREH.water_in[t] + ELECTROLYSIS_PLANTS_RREH.water[t] + DIRECT_AIR_CAPTURE_PLANTS_RREH.water[t];
+
+#HYPEREDGE COASTAL_CARBON_DIOXIDE_BALANCE
+#CONSTRAINTS
+DIRECT_AIR_CAPTURE_PLANTS_RREH.carbon_dioxide[t] + CARBON_DIOXIDE_STORAGE_RREH.carbon_dioxide_out[t] == CARBON_DIOXIDE_STORAGE_RREH.carbon_dioxide_in[t] + METHANOL_PLANTS_RREH.carbon_dioxide[t];
+
+#HYPEREDGE COASTAL_LIQUEFIED_METHANOL_BALANCE
+#CONSTRAINTS
+METHANOL_PLANTS_RREH.methanol[t] + METHANOL_STORAGE_HUB_RREH.liquefied_methanol_out[t] == METHANOL_STORAGE_HUB_RREH.liquefied_methanol_in[t] + LIQUEFIED_METHANOL_CARRIERS_RREH.liquefied_methanol_in[t];
+
+#HYPEREDGE DESTINATION_LIQUEFIED_METHANOL_BALANCE
+#PARAMETERS
+demand = import "../../data/MEOH_demand.csv";
+#CONSTRAINTS
+LIQUEFIED_METHANOL_CARRIERS_RREH.liquefied_methanol_out[t] + METHANOL_STORAGE_DESTINATION_BE.liquefied_methanol_out[t] == METHANOL_STORAGE_DESTINATION_BE.liquefied_methanol_in[t] + demand[t];

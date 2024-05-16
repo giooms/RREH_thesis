@@ -1,0 +1,32 @@
+
+\begin{table}
+\centering
+\begin{tabular}{lrlll}
+\toprule
+Country & Onshore Wind Turbines & Offshore Wind Turbines & Solar PV & Hydropower \\
+\midrule
+greenland & 0.533214 & 0.577598 & NA & 0.633180 \\
+spain & 0.268949 & NA & 0.167367 & NA \\
+algeria & 0.500383 & NA & 0.245597 & NA \\
+germany & 0.194497 & NA & 0.118999 & NA \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{cc}
+\toprule
+Chemical & Conversion Factor (\%) \\ 
+\midrule
+methane & 0.41\% \\ 
+methane & 0.39\% \\ 
+ammonia & 0.58\% \\ 
+methanol & 0.42\% \\ 
+hydrogen & 0.47\% \\ 
+\bottomrule
+\end{tabular}
+\caption{System Conversion Factors}
+\label{tab:system_conversion_factors}
+\end{table}
+
