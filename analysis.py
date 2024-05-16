@@ -1053,7 +1053,6 @@ def prepare_plot_data(df, column_name, add_constant_suffix=False):
         f'{column_name} constant': constant_values,
         f'{column_name} diff': diff_values
     })
-    print(prepared_data.head())
 
     return prepared_data
 
@@ -1164,8 +1163,6 @@ def plot_technology_capacities_and_prices(df, time_horizon, report=False):
     plot_data['installed capacity'] = pd.to_numeric(plot_data['installed capacity'], errors='coerce')
     plot_data['price per mwh constant'] = pd.to_numeric(plot_data['price per mwh constant'], errors='coerce')
 
-    print(plot_data)
-
     # Settings for the dual bars
     n = len(plot_data)
     index = np.arange(n)
@@ -1256,8 +1253,6 @@ def plot_installed_capacity_specific_technologies(df, time_horizon, report=False
     technologies = ['ON_WIND_PLANTS_RREH', 'OFF_WIND_PLANTS_RREH', 'hydro_rreh', 'ELECTROLYSIS_PLANTS_RREH']
     colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red']  # Colors for each scenario
 
-    print("DataFrame columns:", df.columns)
-
     # Step 1: Determine the maximum installed capacity value
     max_capacity = 0
     for tech in technologies:
@@ -1278,21 +1273,15 @@ def plot_installed_capacity_specific_technologies(df, time_horizon, report=False
 
     for ax, tech in zip(axs.flat, technologies):
         if tech not in df.columns:
-            print(f"Warning: {tech} not found in DataFrame columns. Skipping.")
             continue
 
         plot_data = prepare_plot_data(df, tech, add_constant_suffix=True)
-        print(f"Data before filtering for {tech}:")
-        print(plot_data.head())
 
         plot_data = plot_data[plot_data['Scenario'].isin(scenarios)]
-        print(f"Data after filtering for {tech}:")
-        print(plot_data.head())
 
         plot_data['Scenario'] = plot_data['Scenario'].map(scenario_names)
 
         if plot_data.empty:
-            print(f"No data available for {tech}. Skipping.")
             continue
 
         scenarios_list = plot_data['Scenario'].tolist()
@@ -1324,12 +1313,12 @@ def plot_installed_capacity_specific_technologies(df, time_horizon, report=False
 
 def plot_cost_comparison_specific_scenarios(df, time_horizon, report=False):
     # Scenarios of interest with updated names
-    specific_scenarios = ['hydro_wind_constant', 'methanol_constant', 'hydrogen_constant', 'ammonia_constant']
+    specific_scenarios = ['hydro_wind', 'methanol', 'hydrogen', 'ammonia']
     scenario_names = {
-        'hydro_wind_constant': 'Methane',
-        'methanol_constant': 'Methanol',
-        'hydrogen_constant': 'Hydrogen',
-        'ammonia_constant': 'Ammonia'
+        'hydro_wind': 'Methane',
+        'methanol': 'Methanol',
+        'hydrogen': 'Hydrogen',
+        'ammonia': 'Ammonia'
     }
 
     # Prepare the total cost data
@@ -1360,12 +1349,21 @@ def plot_cost_comparison_specific_scenarios(df, time_horizon, report=False):
     print("Data before filtering:")
     print(cost_data.head())
 
+    # Debugging step: Print scenarios present in the merged cost_data
+    print("Scenarios in merged cost_data:")
+    print(cost_data['Scenario'].unique())
+
+    # Filter the data to include only specific scenarios
     cost_data = cost_data[cost_data['Scenario'].isin(specific_scenarios)]
     print("Data after filtering:")
     print(cost_data.head())
 
     # Map scenario names
     cost_data['Scenario'] = cost_data['Scenario'].map(scenario_names)
+
+    # Debugging step: Print the scenarios after mapping
+    print("Scenarios after mapping:")
+    print(cost_data['Scenario'].unique())
 
     if cost_data.empty:
         print("No data available for the specified scenarios. Exiting.")
@@ -1399,23 +1397,28 @@ def plot_cost_comparison_specific_scenarios(df, time_horizon, report=False):
     # Annotate the bars with their values
     for bar, cost in zip(rreh_bars, cost_data['price_mwh']):
         height = bar.get_height()
-        ax.annotate(f'{cost:.2f}', xy=(bar.get_x() + bar.get_width() / 2, height), xytext=(0, 3), textcoords="offset points", ha='center', va='bottom')
+        ax.annotate(f'{cost:.2f}', xy=(bar.get_x() + bar.get_width() / 2, height), xytext=(0, 6), textcoords="offset points", ha='center', va='bottom')
 
     fig.legend(loc="upper right", bbox_to_anchor=(1, 1), bbox_transform=ax.transAxes)
     if not report:
         plt.title('Total Costs per MWh for Specific Scenarios')
     fig.tight_layout()
     img_folder_path = f'scripts/results/img/{time_horizon}'
+    
+    # Ensure the directory exists
     if not os.path.exists(img_folder_path):
         os.makedirs(img_folder_path)
-    if report:
-        plt.savefig(os.path.join(img_folder_path, 'costs_specific_scenarios_constant.pdf'), bbox_inches='tight', format='pdf')
-    else:
-        plt.tight_layout()
-        plt.savefig(os.path.join(img_folder_path, 'costs_specific_scenarios_constant.png'), bbox_inches='tight', format='png')
+        print(f"Created directory: {img_folder_path}")
+
+    # Determine file name and path
+    file_name = 'costs_specific_scenarios_constant.pdf' if report else 'costs_specific_scenarios_constant.png'
+    file_path = os.path.join(img_folder_path, file_name)
+    
+    # Save the plot
+    plt.savefig(file_path, bbox_inches='tight', format='pdf' if report else 'png')
+    print(f"Plot saved to: {file_path}")
 
     plt.close(fig)
-
 
 def plot_stacked_bar_costs(df, time_horizon, report=False):
     exclude_scenarios = ['spain', 'germany', 'algeria', 'ammonia', 'methanol', 'hydrogen']

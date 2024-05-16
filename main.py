@@ -20,7 +20,9 @@ SCENARIO_FILES = {
     'germany': 'germany.gboml',
     'ammonia': 'Ammonia.gboml',
     'hydrogen': 'Hydrogen.gboml',
-    'methanol': 'Methanol.gboml'
+    'methanol': 'Methanol.gboml',
+    'germany_pipe': 'germany_pipe.gboml',
+    'spain_pipe': 'spain_pipe.gboml'
 }
 
 def set_wacc_parameters(gboml_model, wacc_case, scenario):
@@ -36,7 +38,9 @@ def set_wacc_parameters(gboml_model, wacc_case, scenario):
         # Dictionaries for specific scenarios
         scenario_params = {
             'spain': {'wacc': 0.0587, 'onshore_wacc': 0.031, 'solar_wacc': 0.036},
+            'spain_pipe': {'wacc': 0.0587, 'onshore_wacc': 0.031, 'solar_wacc': 0.036},
             'germany': {'wacc': 0.0353, 'onshore_wacc': 0.013, 'solar_wacc': 0.013},
+            'germany_pipe': {'wacc': 0.0353, 'onshore_wacc': 0.013, 'solar_wacc': 0.013},
             'algeria': {'wacc': 0.1011, 'onshore_wacc': 0.114, 'solar_wacc': 0.11},
             'default': {'wacc': 0.0353, 'onshore_wacc': 0.015, 'offshore_wacc': 0.015, 'hydro_wacc': 0.0421}
         }

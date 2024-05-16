@@ -1,0 +1,88 @@
+#TIMEHORIZON
+T=8760;
+
+#GLOBAL
+//wacc = 0.07;
+//solar_wacc = 0.013;
+//wind_wacc = 0.013;
+number_years_horizon = T/8760;
+co2_emission_cost = 0;
+
+#NODE SOLAR_PV_PLANTS_RREH
+#PARAMETERS
+full_capex = 380.0;
+lifetime = 25.0;
+annualised_capex = full_capex * global.solar_wacc * (1 + global.solar_wacc)**lifetime / ((1 + global.solar_wacc)**lifetime - 1); // MEur
+fom = 9.5; // MEur/year
+vom = 0.0;
+capacity_factor_PV = import "../../data/pv_capacity_factors_DE.csv"; // Dimensionless
+max_capacity = 500.0; // GW
+#VARIABLES
+internal: capacity;
+external: electricity[T];
+#CONSTRAINTS
+electricity[t] == capacity_factor_PV[t] * capacity;
+capacity <= max_capacity;
+capacity >= 0;
+electricity[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * electricity[t];
+
+#NODE ON_WIND_PLANTS_RREH
+#PARAMETERS
+full_capex = 1110.0;
+lifetime = 30.0;
+annualised_capex = full_capex * global.onshore_wacc * (1 + global.onshore_wacc)**lifetime / ((1 + global.onshore_wacc)**lifetime - 1); // MEur
+fom = 13.4; // MEur/year
+vom = 0.00144; // MEur/GWh
+capacity_factor_wind = import "../../data/wind_capacity_factors_DE.csv"; // Dimensionless
+max_capacity = 500.0; // GW
+#VARIABLES
+internal: capacity;
+external: electricity[T];
+#CONSTRAINTS
+electricity[t] == capacity_factor_wind[t] * capacity;
+capacity <= max_capacity;
+capacity >= 0;
+electricity[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * electricity[t];
+
+#NODE BATTERY_STORAGE_RREH = import BATTERY_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
+#NODE HVDC_RREH = import HVDC from "..\..\templates\remote_hub_wacc.gboml" with full_capex_lines = 0.25*100;
+#NODE ELECTROLYSIS_PLANTS_RREH = import ELECTROLYSIS_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
+#NODE DESALINATION_PLANTS_RREH = import DESALINATION_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
+#NODE DIRECT_AIR_CAPTURE_PLANTS_RREH = import DIRECT_AIR_CAPTURE_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
+#NODE HYDROGEN_STORAGE_RREH = import HYDROGEN_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
+#NODE CARBON_DIOXIDE_STORAGE_RREH = import CARBON_DIOXIDE_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
+#NODE WATER_STORAGE_RREH = import WATER_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
+#NODE METHANATION_PLANTS_RREH = import METHANATION_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
+
+#HYPEREDGE INLAND_POWER_BALANCE
+#CONSTRAINTS
+SOLAR_PV_PLANTS_RREH.electricity[t] + ON_WIND_PLANTS_RREH.electricity[t] + BATTERY_STORAGE_RREH.electricity_out[t] == BATTERY_STORAGE_RREH.electricity_in[t] + HVDC_RREH.electricity_in[t];
+
+#HYPEREDGE COASTAL_POWER_BALANCE
+#CONSTRAINTS
+HVDC_RREH.electricity_out[t] == ELECTROLYSIS_PLANTS_RREH.electricity[t] + HYDROGEN_STORAGE_RREH.electricity[t] + DESALINATION_PLANTS_RREH.electricity[t] + WATER_STORAGE_RREH.electricity[t] + DIRECT_AIR_CAPTURE_PLANTS_RREH.electricity[t] + CARBON_DIOXIDE_STORAGE_RREH.electricity[t];
+
+#HYPEREDGE COASTAL_HYDROGEN_BALANCE
+#CONSTRAINTS
+ELECTROLYSIS_PLANTS_RREH.hydrogen[t] + HYDROGEN_STORAGE_RREH.hydrogen_out[t] == HYDROGEN_STORAGE_RREH.hydrogen_in[t] + DIRECT_AIR_CAPTURE_PLANTS_RREH.hydrogen[t] + METHANATION_PLANTS_RREH.hydrogen[t];
+
+#HYPEREDGE COASTAL_WATER_BALANCE
+#CONSTRAINTS
+DESALINATION_PLANTS_RREH.water[t] + METHANATION_PLANTS_RREH.water[t] + WATER_STORAGE_RREH.water_out[t] == WATER_STORAGE_RREH.water_in[t] + ELECTROLYSIS_PLANTS_RREH.water[t] + DIRECT_AIR_CAPTURE_PLANTS_RREH.water[t];
+
+#HYPEREDGE COASTAL_CARBON_DIOXIDE_BALANCE
+#CONSTRAINTS
+DIRECT_AIR_CAPTURE_PLANTS_RREH.carbon_dioxide[t] + CARBON_DIOXIDE_STORAGE_RREH.carbon_dioxide_out[t] == CARBON_DIOXIDE_STORAGE_RREH.carbon_dioxide_in[t] + METHANATION_PLANTS_RREH.carbon_dioxide[t];
+
+#HYPEREDGE DESTINATION_METHANE_BALANCE
+	#PARAMETERS
+        demand = import "..\..\data\demand_ng.csv"; // /!\ Gas Demand Constant // GWh (ch4)
+        conversion_factor = 15.31; // GWh/kt of liquefied gas
+	#CONSTRAINTS
+	    METHANATION_PLANTS_RREH.methane[t] == demand[t];

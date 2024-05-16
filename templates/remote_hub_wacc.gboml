@@ -47,7 +47,7 @@ electricity[t] >= 0;
 min: global.number_years_horizon * (annualised_capex + fom) * capacity;
 min: vom * electricity[t];
 
-#NODE BATTERY_STORAGE_RREH
+#NODE BATTERY_STORAGE
 #PARAMETERS
 full_capex_stock = 142.0;
 full_capex_flow = 160.0;
@@ -84,7 +84,7 @@ electricity_out[t] >= 0;
 min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
 min: vom_stock * electricity_stored[t] + vom_flow * electricity_in[t];
 
-#NODE HVDC_RREH
+#NODE HVDC
 #PARAMETERS
 full_capex_lines = 0.25*1000;
 full_capex_stations = 2*115.0;
@@ -110,7 +110,7 @@ electricity_out[t] >= 0;
 min: global.number_years_horizon * (annualised_capex + fom) * capacity;
 min: vom * electricity_in[t];
 
-#NODE ELECTROLYSIS_PLANTS_RREH
+#NODE ELECTROLYSIS_PLANTS
 #PARAMETERS
 full_capex = 600.0;
 lifetime = 15.0;
@@ -138,7 +138,7 @@ water[t] >= 0;
 min: global.number_years_horizon * (annualised_capex + fom) * capacity;
 min: vom * electricity[t];
 
-#NODE DESALINATION_PLANTS_RREH
+#NODE DESALINATION_PLANTS
 #PARAMETERS
 full_capex = 28.08;
 lifetime = 20.0;
@@ -203,7 +203,7 @@ min dac_cost_fix: global.number_years_horizon * (annualised_capex + fom) * capac
 min dac_cost_var: vom * carbon_dioxide[t];
 min dac_permits: -global.co2_emission_cost * carbon_dioxide[t];
 
-#NODE HYDROGEN_STORAGE_RREH
+#NODE HYDROGEN_STORAGE
 #PARAMETERS
 full_capex_stock = 45.0;
 full_capex_flow = 0.0;
@@ -279,7 +279,7 @@ electricity[t] >= 0;
 min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
 min: vom_stock * carbon_dioxide_stored[t] + vom_flow * carbon_dioxide_in[t];
 
-#NODE WATER_STORAGE_RREH
+#NODE WATER_STORAGE
 #PARAMETERS
 full_capex_stock = 0.065;
 full_capex_flow = 1.55923;
@@ -502,19 +502,19 @@ min: vom * liquefied_methane[t];
 
 #HYPEREDGE INLAND_POWER_BALANCE
 #CONSTRAINTS
-SOLAR_PV_PLANTS.electricity[t] + WIND_PLANTS.electricity[t] + BATTERY_STORAGE_RREH.electricity_out[t] == BATTERY_STORAGE_RREH.electricity_in[t] + HVDC_RREH.electricity_in[t];
+SOLAR_PV_PLANTS.electricity[t] + WIND_PLANTS.electricity[t] + BATTERY_STORAGE.electricity_out[t] == BATTERY_STORAGE.electricity_in[t] + HVDC.electricity_in[t];
 
 #HYPEREDGE COASTAL_POWER_BALANCE
 #CONSTRAINTS
-HVDC_RREH.electricity_out[t] == ELECTROLYSIS_PLANTS_RREH.electricity[t] + HYDROGEN_STORAGE_RREH.electricity[t] + DESALINATION_PLANTS_RREH.electricity[t] + WATER_STORAGE_RREH.electricity[t] + DIRECT_AIR_CAPTURE_PLANTS.electricity[t] + CARBON_DIOXIDE_STORAGE.electricity[t] + METHANE_LIQUEFACTION_PLANTS.electricity[t];
+HVDC.electricity_out[t] == ELECTROLYSIS_PLANTS.electricity[t] + HYDROGEN_STORAGE.electricity[t] + DESALINATION_PLANTS.electricity[t] + WATER_STORAGE.electricity[t] + DIRECT_AIR_CAPTURE_PLANTS.electricity[t] + CARBON_DIOXIDE_STORAGE.electricity[t] + METHANE_LIQUEFACTION_PLANTS.electricity[t];
 
 #HYPEREDGE COASTAL_HYDROGEN_BALANCE
 #CONSTRAINTS
-ELECTROLYSIS_PLANTS_RREH.hydrogen[t] + HYDROGEN_STORAGE_RREH.hydrogen_out[t] == HYDROGEN_STORAGE_RREH.hydrogen_in[t] + DIRECT_AIR_CAPTURE_PLANTS.hydrogen[t] + METHANATION_PLANTS.hydrogen[t];
+ELECTROLYSIS_PLANTS.hydrogen[t] + HYDROGEN_STORAGE.hydrogen_out[t] == HYDROGEN_STORAGE.hydrogen_in[t] + DIRECT_AIR_CAPTURE_PLANTS.hydrogen[t] + METHANATION_PLANTS.hydrogen[t];
 
 #HYPEREDGE COASTAL_WATER_BALANCE
 #CONSTRAINTS
-DESALINATION_PLANTS_RREH.water[t] + METHANATION_PLANTS.water[t] + WATER_STORAGE_RREH.water_out[t] == WATER_STORAGE_RREH.water_in[t] + ELECTROLYSIS_PLANTS_RREH.water[t] + DIRECT_AIR_CAPTURE_PLANTS.water[t];
+DESALINATION_PLANTS.water[t] + METHANATION_PLANTS.water[t] + WATER_STORAGE.water_out[t] == WATER_STORAGE.water_in[t] + ELECTROLYSIS_PLANTS.water[t] + DIRECT_AIR_CAPTURE_PLANTS.water[t];
 
 #HYPEREDGE COASTAL_CARBON_DIOXIDE_BALANCE
 #CONSTRAINTS
