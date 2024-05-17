@@ -226,12 +226,12 @@ def analyze_system_costs(d):
     return RREH_nodes, BE_nodes, cost_RREH, cost_BE, tot_cost
 
 def analyze_and_plot_capacities(scenario, d, results_path, timehorizon, wacc_label, report=False):
-    plant_capacities = calculate_plant_capacities(d)
+    plant_capacities = calculate_plant_capacities(scenario, d, results_path, timehorizon, wacc_label)
     plot_and_save_capacities(plant_capacities, scenario, results_path, timehorizon, report, wacc_label)
     
     return plant_capacities
 
-def calculate_plant_capacities(d):
+def calculate_plant_capacities(scenario, d, results_path, timehorizon, wacc_label):
     plant_capacities = {}
 
     if hasattr(d.solution.elements, "WAVE_PLANT_RREH"):
@@ -269,6 +269,50 @@ def calculate_plant_capacities(d):
                     plant_capacities[element_name+'_stock'] = np.sum(capacity_stock_values)
                     plant_capacities[element_name+'_flow'] = np.sum(capacity_flow_values)
 
+
+    # Filter plant capacities to include only those with _flow and _stock
+    regular_capacities = {k: v for k, v in plant_capacities.items() if '_flow' not in k and '_stock' not in k}
+    flow_stock_capacities = {k: v for k, v in plant_capacities.items() if '_flow' in k or '_stock' in k}
+
+    # Define the directory for saving images and LaTeX files
+    img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
+    img_folder_path = os.path.join(results_path, img_folder_name)
+    if not os.path.exists(img_folder_path):
+        os.makedirs(img_folder_path)
+    
+    tex_file_path = os.path.join(img_folder_path, f"{scenario}__capacities.tex")
+    with open(tex_file_path, 'w') as tex_file:
+        tex_file.write("\\begin{table}[h]\n")
+        tex_file.write("    \\centering\n")
+        tex_file.write("    \\begin{minipage}{0.45\\textwidth}\n")
+        tex_file.write("    \\centering\n")
+        tex_file.write("    \\begin{tabular}{lc}\n")
+        tex_file.write("        \\toprule\n")
+        tex_file.write("        Category & Capacity (GW) \\\\\n")
+        tex_file.write("        \\midrule\n")
+        for category, value in flow_stock_capacities.items():
+            tex_file.write(f"        {category.replace('_', ' ').title()} & {value:.3f} \\\\\n")
+        tex_file.write("        \\bottomrule\n")
+        tex_file.write("    \\end{tabular}\n")
+        tex_file.write(f"    \\caption{{Flow and Stock Capacities for {scenario} scenario}}\n")
+        tex_file.write(f"    \\label{{tab:capacities_flow_stock_{scenario}}}\n")
+        tex_file.write("    \\end{minipage}\n")
+        tex_file.write("    \\hspace{0.05\\textwidth}\n")
+        tex_file.write("    \\begin{minipage}{0.45\\textwidth}\n")
+        tex_file.write("    \\centering\n")
+        tex_file.write("    \\begin{tabular}{lc}\n")
+        tex_file.write("        \\toprule\n")
+        tex_file.write("        Category & Capacity (GW) \\\\\n")
+        tex_file.write("        \\midrule\n")
+        for category, value in regular_capacities.items():
+            tex_file.write(f"        {category.replace('_', ' ').title()} & {value:.3f} \\\\\n")
+        tex_file.write("        \\bottomrule\n")
+        tex_file.write("    \\end{tabular}\n")
+        tex_file.write(f"    \\caption{{Regular Capacities for {scenario} scenario}}\n")
+        tex_file.write(f"    \\label{{tab:capacities_regular_{scenario}}}\n")
+        tex_file.write("    \\end{minipage}\n")
+        tex_file.write("\\end{table}\n")
+
     return plant_capacities
 
 def plot_and_save_capacities(capacities, scenario, results_path, timehorizon, report, wacc_label):
@@ -292,17 +336,29 @@ def plot_and_save_capacities(capacities, scenario, results_path, timehorizon, re
         categories.append('Total Hydro')
         capacity_values.append(total_hydro_capacity)
     
-    color = [plt.cm.viridis(0.75)]
+    # Filter out categories with zero capacity except for Battery Flow, Battery Stock, and Electrolysis
+    filtered_categories = []
+    filtered_capacity_values = []
+    for category, value in zip(categories, capacity_values):
+        if value > 0 or category in ['Battery Flow', 'Battery Stock', 'Electrolysis']:
+            filtered_categories.append(category)
+            filtered_capacity_values.append(value)
+
+    # Define the directory for saving images
+    img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
+    img_folder_path = os.path.join(results_path, img_folder_name)
+    if not os.path.exists(img_folder_path):
+        os.makedirs(img_folder_path)
 
     # Setup the plot
     fig, ax = plt.subplots(figsize=(10, 6))
-    bars = ax.bar(categories, capacity_values, color=color)
+    bars = ax.bar(filtered_categories, filtered_capacity_values, color=[plt.cm.viridis(0.75) for _ in filtered_categories])
     
     ax.set_ylabel('Installed Capacity (GW)')
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     
     # Adjust y-axis to fit the labels
-    ax.set_ylim(0, max(capacity_values) * 1.2)
+    ax.set_ylim(0, max(filtered_capacity_values) * 1.2)
     
     # Add labels above the bars
     for bar in bars:
@@ -312,12 +368,6 @@ def plot_and_save_capacities(capacities, scenario, results_path, timehorizon, re
                     xytext=(0, 3),  # 3 points vertical offset
                     textcoords='offset points',
                     ha='center', va='bottom')
-
-    # Save the general capacities plot
-    img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
-    img_folder_path = os.path.join(results_path, img_folder_name)
-    if not os.path.exists(img_folder_path):
-        os.makedirs(img_folder_path)
     
     if report:
         ax.set_title('')
@@ -366,18 +416,19 @@ def plot_individual_hydro_capacities(hydro_keys, capacities, scenario, img_folde
     plt.close(fig)
 
 def calculate_price_per_mwh(d, tot_cost, scenario, timehorizon):
-    
     if scenario == "hydrogen":
         demand_in_twh = sum(d.solution.elements.LIQUEFIED_HYDROGEN_REGASIFICATION_BE.variables.hydrogen.values) * 0.0394
     elif scenario == "ammonia":
         demand_in_twh = sum(d.solution.elements.LIQUEFIED_NH3_REGASIFICATION_BE.variables.ammonia.values) * 0.00625
     elif scenario == "methanol":
         demand_in_twh = sum(d.solution.elements.LIQUEFIED_METHANOL_CARRIERS_RREH.variables.liquefied_methanol_out.values) * 0.00639
+    elif scenario == "germany_pipe" or scenario == "spain_pipe":
+        demand_in_twh = sum(d.solution.elements.METHANATION_PLANTS_RREH.variables.methane.values) * 0.015441  # kt/h * MWh/kg
     else:
         demand_in_twh = sum(d.solution.elements.LIQUEFIED_METHANE_REGASIFICATION.variables.methane.values) * 0.015441  # kt/h * MWh/kg
 
     # Compute price per MWh in euros
-    price_per_mwh = tot_cost / demand_in_twh # M€/GWh <=> €/MWh
+    price_per_mwh = tot_cost / demand_in_twh # M€/GW /TWH <=> €/MWh
     print(f"The price in the scenario {scenario} with the time horizon {timehorizon} is {price_per_mwh:.3f} €/MWh")
 
     return price_per_mwh, demand_in_twh
@@ -458,8 +509,10 @@ def plot_production_dynamics(d, plant_capacities, results_path, scenario, timeho
         'hydro': ['HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH'],
         'wave': ['WAVE_PLANT_RREH'],
         'spain': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH'],
+        'spain_pipe': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH'],
         'algeria': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH'],
         'germany': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH'],
+        'germany_pipe': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH'],
         'ammonia': ['OFF_WIND_PLANTS_RREH', 'ON_WIND_PLANTS_RREH', 'HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH'],
         'hydrogen': ['OFF_WIND_PLANTS_RREH', 'ON_WIND_PLANTS_RREH', 'HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH'],
         'methanol': ['OFF_WIND_PLANTS_RREH', 'ON_WIND_PLANTS_RREH', 'HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH']
@@ -479,7 +532,7 @@ def plot_production_dynamics(d, plant_capacities, results_path, scenario, timeho
 
     date_range = pd.date_range(start=start_date, periods=len(next(iter(production_data.values()))), freq='H')
     num_plots = len(production_data)
-    fig, axs = plt.subplots(num_plots, 1, figsize=(12, num_plots * 2), sharex=True)
+    fig, axs = plt.subplots(num_plots, 1, figsize=(15, num_plots * 3), sharex=True)
     if num_plots == 1:
         axs = [axs]
         colors = [plt.cm.viridis(0.5)]
@@ -494,10 +547,20 @@ def plot_production_dynamics(d, plant_capacities, results_path, scenario, timeho
         else:
             ax.fill_between(date_range, data_series, color=color)
         ax.set_title(f'{production_type.replace("_", " ").title()} Production (RREH)', fontsize=10, loc='left')
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
-        ax.xaxis.set_major_locator(mdates.MonthLocator())
         ax.set_ylabel('GWh')
+        # Set the x-axis to show major ticks for each year and minor ticks every 3 months
+        ax.xaxis.set_major_locator(mdates.YearLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+        ax.xaxis.set_minor_locator(mdates.MonthLocator(interval=3))
+        ax.xaxis.set_minor_formatter(mdates.DateFormatter('%b'))
+        ax.tick_params(axis='x', which='major', length=10)
+        ax.tick_params(axis='x', which='minor', length=5)
+        # Ensure the x-axis labels do not overlap
+        plt.setp(ax.get_xticklabels(minor=True), rotation=0, ha='center')
 
+    fig.tight_layout()
+    fig.autofmt_xdate()
+    
     img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
     img_folder_path = os.path.join(results_path, img_folder_name)
     os.makedirs(img_folder_path, exist_ok=True)
@@ -753,17 +816,31 @@ def plot_typical_weeks_prod(d, results_path, scenario, timehorizon, report=False
     plt.close(fig)
 
 def conversion_factor(d, scenario):
-    onshore = sum(d.solution.elements.ON_WIND_PLANTS_RREH.variables.electricity.values)
-    offshore = sum(d.solution.elements.OFF_WIND_PLANTS_RREH.variables.electricity.values)
-    hydro = np.sum([
-        np.sum(d.solution.elements.HYDRO_PLANT_03h_RREH.variables.electricity.values),
-        np.sum(d.solution.elements.HYDRO_PLANT_03j_RREH.variables.electricity.values),
-        np.sum(d.solution.elements.HYDRO_PLANT_05h_RREH.variables.electricity.values)
-    ])
+    production_types_mapping = {
+        'combined': ['OFF_WIND_PLANTS_RREH', 'ON_WIND_PLANTS_RREH', 'HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH', 'WAVE_PLANT_RREH'],
+        'hydro_wind': ['OFF_WIND_PLANTS_RREH', 'ON_WIND_PLANTS_RREH', 'HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH'],
+        'wind_onshore': ['ON_WIND_PLANTS_RREH'],
+        'wind_offshore': ['OFF_WIND_PLANTS_RREH'],
+        'hydro': ['HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH'],
+        'wave': ['WAVE_PLANT_RREH'],
+        'spain': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH'],
+        'spain_pipe': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH'],
+        'algeria': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH'],
+        'germany': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH'],
+        'germany_pipe': ['ON_WIND_PLANTS_RREH', 'SOLAR_PV_PLANTS_RREH'],
+        'ammonia': ['OFF_WIND_PLANTS_RREH', 'ON_WIND_PLANTS_RREH', 'HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH'],
+        'hydrogen': ['OFF_WIND_PLANTS_RREH', 'ON_WIND_PLANTS_RREH', 'HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH'],
+        'methanol': ['OFF_WIND_PLANTS_RREH', 'ON_WIND_PLANTS_RREH', 'HYDRO_PLANT_03h_RREH', 'HYDRO_PLANT_03j_RREH', 'HYDRO_PLANT_05h_RREH']
+    }
     
-    electricity = np.sum([onshore, offshore, hydro])
+    # Get the relevant plant types for the given scenario
+    plant_types = production_types_mapping.get(scenario, [])
+    # Calculate total electricity produced by relevant plants
+    electricity = 0
+    for plant_type in plant_types:
+        electricity += np.sum(getattr(d.solution.elements, plant_type).variables.electricity.values)
 
-    if scenario == 'hydro_wind':
+    if scenario in ['wind_onshore', 'wind_offshore', 'hydro', 'wave', 'spain', 'germany', 'algeria','combined','hydro_wind']:
         prod_ch4 = sum(d.solution.elements.METHANATION_PLANTS_RREH.variables.methane.values) * 15.441
         conversion_factor = prod_ch4 / electricity
     elif scenario == 'ammonia':
@@ -778,8 +855,7 @@ def conversion_factor(d, scenario):
     else:
         conversion_factor = None
 
-    return conversion_factor
-  
+    return round(conversion_factor,2)
 
 class MakeMeReadable:
     def __init__(self, d):
@@ -805,7 +881,7 @@ class MakeMeReadable:
 
 def analyze_json_files(args):
     
-    scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro', 'hydro_wind', 'combined', 'spain', 'algeria', 'germany', 'ammonia', 'methanol', 'hydrogen']
+    scenarios = ['wind_onshore', 'wind_offshore', 'wave', 'hydro', 'hydro_wind', 'combined', 'spain', 'algeria', 'germany', 'germany_pipe', 'spain_pipe', 'ammonia', 'methanol', 'hydrogen']
 
     base_path = 'models'  # Adjust this path as necessary
 
@@ -816,7 +892,7 @@ def analyze_json_files(args):
 
     all_data = []
     
-    capacity_factors_df = pd.DataFrame(columns=['Country', 'Onshore Wind Turbines', 'Offshore Wind Turbines', 'Solar PV', 'Hydropower'])
+    capacity_factors_df = pd.DataFrame(columns=['Country', 'Onshore Wind Turbines', 'Offshore Wind Turbines', 'Wave Energy Converters', 'Solar PV', 'Hydropower'])
     conversion_factors_df = pd.DataFrame(columns=['Energy Carrier', 'Conversion Factor'])
     
     for scenario in scenarios:
@@ -869,7 +945,7 @@ def analyze_json_files(args):
 
                             # Initial check
                             print(f"Plot of balances for {scenario_name} with time horizon {args.timehorizon}")
-                            if scenario not in ['ammonia', 'methanol', 'hydrogen']:
+                            if scenario not in ['ammonia', 'methanol', 'hydrogen', 'germany_pipe', 'spain_pipe']:
                                 compute_and_plot_balances(scenario_name, data, results_path, args.timehorizon, wacc_label)
 
                             # Compute total costs
@@ -885,7 +961,6 @@ def analyze_json_files(args):
                             plant_capacities = analyze_and_plot_capacities(scenario_name, data, results_path, args.timehorizon, wacc_label, args.report)
 
                             # Aggregate plant capacities
-                            # Direct mapping for non-hydro capacities
                             for capacity_type in ["ON_WIND_PLANTS_RREH", "OFF_WIND_PLANTS_RREH", "WAVE_PLANT_RREH", "SOLAR_PV_PLANTS_RREH", "BATTERY_STORAGE_RREH_flow", "BATTERY_STORAGE_RREH_stock", "ELECTROLYSIS_PLANTS_RREH"]:
                                 aggregated_data[capacity_type].append(plant_capacities.get(capacity_type, "NA"))
 
@@ -927,7 +1002,7 @@ def analyze_json_files(args):
                                 plot_basin_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
 
                             # Plot storage dynamic
-                            if scenario not in ['ammonia', 'methanol', 'hydrogen']:
+                            if scenario not in ['ammonia', 'methanol', 'hydrogen', 'germany_pipe', 'spain_pipe']:
                                 plot_storage_dynamics(data, results_path, scenario_name, args.timehorizon, wacc_label)
 
                             # Plot energy production dynamic
@@ -940,23 +1015,25 @@ def analyze_json_files(args):
                             else:
                                 hydropower_avg = 'NA'
 
-                            if scenario in ['hydro_wind', 'germany', 'algeria', 'spain'] and wacc_label == 'constant':
+                            if scenario not in ['germany_pipe', 'spain_pipe'] and wacc_label == 'constant':
                                 new_row = pd.DataFrame({
                                     'Country': ['greenland' if scenario == 'hydro_wind' else scenario],
                                     'Onshore Wind Turbines': [capacity_factors.get('ON_WIND_PLANTS_RREH', 'NA')],
                                     'Offshore Wind Turbines': [capacity_factors.get('OFF_WIND_PLANTS_RREH', 'NA')],
+                                    'Wave Energy Converters': [capacity_factors.get('WAVE_PLANT_RREH', 'NA')],
                                     'Solar PV': [capacity_factors.get('SOLAR_PV_PLANTS_RREH', 'NA')],
                                     'Hydropower': [hydropower_avg]
                                 })
                                 capacity_factors_df = pd.concat([capacity_factors_df, new_row], ignore_index=True)
-                            if scenario in ['hydro_wind', 'methanol', 'ammonia', 'hydrogen']:
-                                plot_typical_weeks_prod(data, results_path, scenario, args.timehorizon, args.report)
 
                                 new_row = pd.DataFrame({
-                                    'Energy Carrier': ['methane' if scenario == 'hydro_wind' else scenario],
-                                    'Conversion Factor': [round(conversion_factor(data, scenario), 2)]
+                                    'Energy Carrier': [scenario],
+                                    'Conversion Factor': [conversion_factor(data, scenario)]
                                 })
                                 conversion_factors_df = pd.concat([conversion_factors_df, new_row], ignore_index=True)
+                            
+                            if scenario in ['hydro_wind', 'ammonia', 'methanol', 'hydrogen']:
+                                plot_typical_weeks_prod(data, results_path, scenario, args.timehorizon, args.report)
                             
         all_data.append(aggregated_data)
 
@@ -1009,9 +1086,6 @@ def analyze_json_files(args):
 # =============== ============== ===============
 # ============= CSV FILES ANALYSIS =============
 # =============== ============== ===============
-
-import ast
-import pandas as pd
 
 def prepare_plot_data(df, column_name, add_constant_suffix=False):
     scenarios_expanded = []
@@ -1421,7 +1495,7 @@ def plot_cost_comparison_specific_scenarios(df, time_horizon, report=False):
     plt.close(fig)
 
 def plot_stacked_bar_costs(df, time_horizon, report=False):
-    exclude_scenarios = ['spain', 'germany', 'algeria', 'ammonia', 'methanol', 'hydrogen']
+    exclude_scenarios = ['spain', 'germany', 'algeria', 'ammonia', 'methanol', 'hydrogen', 'germany_pipe', 'spain_pipe']
 
     # Prepare the total cost data
     demand_in_twh = round(int(time_horizon) / 8760 * 10)
@@ -1464,7 +1538,7 @@ def plot_stacked_bar_costs(df, time_horizon, report=False):
                      bottom=cost_data['price_gr'], label='Cost BE (€MWh)', color='tab:red', alpha=0.7)
 
     # Add horizontal line
-    ax.axhline(y=154.82, color='darkred', linestyle='--', label='Reference Case')
+    ax.axhline(y=157.73, color='darkred', linestyle='--', label='Reference Case')
 
     # Labeling and aesthetics
     ax.set_xlabel('Scenario')
