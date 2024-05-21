@@ -4,10 +4,10 @@
 \toprule
 Country & Price at WACC constant & Price at WACC differentiated \\
 \midrule
-greenland & 184.02 & 135.39 \\
-spain & 204.28 & 171.45 \\
-algeria & 157.73 & 197.89 \\
-germany & 267.86 & 188.80 \\
+greenland & 184.70 & 133.03 \\
+spain & 198.68 & 162.66 \\
+algeria & 153.59 & 193.85 \\
+germany & 257.36 & 177.00 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -18,10 +18,10 @@ germany & 267.86 & 188.80 \\
 \toprule
 Technology & Price (€/MWh) & Installed Capacity (GW) \\
 \midrule
-wind_onshore & 246.07 & 8.24 \\
-wind_offshore & 259.19 & 4.72 \\
-wave & 194.82 & 4.22 \\
-hydro & 109.15 & 2.59 \\
+wind_onshore & 232.91 & 8.28 \\
+wind_offshore & 258.28 & 4.81 \\
+wave & 197.31 & 4.13 \\
+hydro & 110.12 & 2.59 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -33,12 +33,12 @@ hydro & 109.15 & 2.59 \\
 \toprule
 Scenario & Price GR (€/MWh) & Price BE (€/MWh) & Total Price (€/MWh) \\
 \midrule
-wind_onshore & 244.73 & 1.33 & 246.07 \\
-wind_offshore & 257.86 & 1.33 & 259.19 \\
-wave & 193.49 & 1.33 & 194.82 \\
-hydro & 107.82 & 1.33 & 109.15 \\
-hydro_wind & 182.69 & 1.33 & 184.02 \\
-combined & 169.42 & 1.33 & 170.75 \\
+wind_onshore & 231.58 & 1.33 & 232.91 \\
+wind_offshore & 256.95 & 1.33 & 258.28 \\
+wave & 195.98 & 1.33 & 197.31 \\
+hydro & 108.79 & 1.33 & 110.12 \\
+hydro_wind & 183.37 & 1.33 & 184.70 \\
+combined & 170.66 & 1.33 & 171.99 \\
 \bottomrule
 \end{tabular}
 \end{table}

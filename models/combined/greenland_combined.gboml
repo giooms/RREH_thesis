@@ -63,7 +63,7 @@
         internal: capacity;
         external: electricity[T];
     #CONSTRAINTS
-        electricity[t] == capacity_factor_off_wind[t] * capacity;
+        electricity[t] <= capacity_factor_off_wind[t] * capacity;
         capacity <= max_capacity;
         capacity >= 0;
         electricity[t] >= 0;
@@ -84,7 +84,7 @@
         internal: capacity;
         external: electricity[T];
     #CONSTRAINTS
-        electricity[t] == capacity_factor_wind[t] * capacity;
+        electricity[t] <= capacity_factor_wind[t] * capacity;
         capacity <= max_capacity;
         capacity >= 0;
         electricity[t] >= 0;
@@ -284,7 +284,7 @@
         
         
 #NODE BATTERY_STORAGE_RREH = import BATTERY_STORAGE from "..\..\templates\remote_hub_wacc.gboml";
-#NODE HVDC_RREH = import HVDC from "..\..\templates\remote_hub_wacc.gboml" with full_capex_lines = 0.25*100;
+#NODE HVDC_RREH = import HVDC from "..\..\templates\remote_hub_wacc.gboml";
 #NODE ELECTROLYSIS_PLANTS_RREH = import ELECTROLYSIS_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
 #NODE DESALINATION_PLANTS_RREH = import DESALINATION_PLANTS from "..\..\templates\remote_hub_wacc.gboml";
 #NODE DIRECT_AIR_CAPTURE_PLANTS_RREH = import DIRECT_AIR_CAPTURE_PLANTS from "..\..\templates\remote_hub_wacc.gboml";

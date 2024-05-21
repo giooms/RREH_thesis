@@ -3,6 +3,10 @@
 *.json
 *.png
 *.pdf
+*.ipynb
+*.txt
+*.tex
+*.drawio
 map.py
 map.png
 map.html

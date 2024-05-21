@@ -21,6 +21,9 @@ SCENARIO_FILES = {
     'ammonia': 'Ammonia.gboml',
     'hydrogen': 'Hydrogen.gboml',
     'methanol': 'Methanol.gboml',
+    'ammonia_algeria': 'Ammonia.gboml',
+    'hydrogen_algeria': 'Hydrogen.gboml',
+    'methanol_algeria': 'Methanol.gboml',
     'germany_pipe': 'germany_pipe.gboml',
     'spain_pipe': 'spain_pipe.gboml'
 }
@@ -97,7 +100,7 @@ def main():
     
     for scenario in scenarios_to_run:
         run_scenario(scenario, args.timehorizon, 'constant')
-        if scenario not in ['ammonia', 'hydrogen', 'methanol']:
+        if scenario not in ['ammonia', 'hydrogen', 'methanol', 'ammonia_algeria', 'hydrogen_algeria', 'methanol_algeria']:
             run_scenario(scenario, args.timehorizon, 'diff')
 
 if __name__ == "__main__":

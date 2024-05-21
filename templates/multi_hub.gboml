@@ -201,7 +201,7 @@ cap_co2 = 0.0; // kt C02
     min: vom * electricity[t];
 
 #NODE BATTERY_STORAGE_GR = import BATTERY_STORAGE from "remote_hub_wacc.gboml";
-#NODE HVDC_GR = import HVDC from "remote_hub_wacc.gboml" with full_capex_lines = 0.25*100;
+#NODE HVDC_GR = import HVDC from "remote_hub_wacc.gboml";
 #NODE ELECTROLYSIS_PLANTS_GR = import ELECTROLYSIS_PLANTS from "remote_hub_wacc.gboml";
 #NODE DESALINATION_PLANTS_GR = import DESALINATION_PLANTS from "remote_hub_wacc.gboml";
 #NODE DIRECT_AIR_CAPTURE_PLANTS_GR = import DIRECT_AIR_CAPTURE_PLANTS from "remote_hub_wacc.gboml";

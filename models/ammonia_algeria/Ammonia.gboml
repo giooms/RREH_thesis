@@ -1,0 +1,293 @@
+#TIMEHORIZON
+T=43800;  // hours 
+
+#GLOBAL
+//wacc = 0.07;
+number_years_horizon = T/8760;
+
+#NODE SOLAR_PV_PLANTS_RREH = import SOLAR_PV_PLANTS_DZ from "..\..\templates\GENERAL.gboml";
+
+#NODE ON_WIND_PLANTS_RREH = import ON_WIND_PLANTS_DZ from "..\..\templates\GENERAL.gboml";
+
+#NODE BATTERY_STORAGE_RREH = import BATTERY_STORAGE_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE HVDC_RREH = import HVDC_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE ELECTROLYSIS_PLANTS_RREH = import ELECTROLYSIS_PLANTS_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE DESALINATION_PLANTS_RREH = import DESALINATION_PLANTS_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE HYDROGEN_STORAGE_RREH = import HYDROGEN_STORAGE_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE WATER_STORAGE_RREH = import WATER_STORAGE_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE ASU_RREH
+// Article from Eric R. Morgan, 2013 was used for the node
+#PARAMETERS
+full_capex = 850; // M€/(kt/h) - nitrogen is the reference flow for sizing
+lifetime = 30.0;  // year
+annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+fom = 50.0; // M€/year
+vom = 0.0; // M€/kt
+conversion_factor_electricity = 0.1081;
+minimum_level = 1.0;
+ramp_rate_up = 0.0;
+ramp_rate_down = 0.0;
+#VARIABLES
+internal: capacity; // kt/h 
+external: electricity[T];  // GWh
+external: nitrogen[T];  // kt/h
+#CONSTRAINTS
+nitrogen[t] <= capacity;
+minimum_level * capacity <= nitrogen[t];
+electricity[t] == conversion_factor_electricity * nitrogen[t];
+nitrogen[t] <= nitrogen[t-1] + ramp_rate_up * capacity;
+nitrogen[t-1] <= nitrogen[t] + ramp_rate_down * capacity;
+capacity >= 0;
+electricity[t] >= 0;
+nitrogen[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * nitrogen[t];
+
+#NODE NITROGEN_STORAGE_RREH
+// Hypothesis : capex same as capex from hydrogen storage 
+// Conversion factor electricity from ASPEN 
+#PARAMETERS
+full_capex_stock = 45.0;  // M€/kt - nitrogen is the reference flow for sizing
+full_capex_flow = 0.0;  // M€/(kt/h)
+lifetime_stock = 30.0;  // year
+lifetime_flow = 30.0;  // year
+annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // M€
+annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // M€
+fom_stock = 2.25;  // MEur/(kt)-year
+fom_flow = 0.0;  // MEur/(kt/h)-year 
+vom_stock = 0.0;  // M€/kt
+vom_flow = 0.0;  // M€/kt
+conversion_factor_electricity = 0.1081;
+#VARIABLES
+internal: capacity_flow;  // kt/h
+internal: capacity_stock;  // kt 
+internal: nitrogen_stored[T];  // kt 
+external: electricity[T];  // GWh
+external: nitrogen_in[T];  // kt/h
+external: nitrogen_out[T];  // kt/h
+#CONSTRAINTS
+nitrogen_in[t] <= capacity_flow;
+nitrogen_out[t] <= capacity_flow;
+nitrogen_stored[t] <= capacity_stock;
+nitrogen_stored[0] == nitrogen_stored[T-1];
+nitrogen_stored[t+1] == nitrogen_stored[t] + nitrogen_in[t] - nitrogen_out[t];
+electricity[t] == conversion_factor_electricity * nitrogen_in[t];
+capacity_flow >= 0;
+capacity_stock >= 0;
+nitrogen_stored[t] >= 0;
+nitrogen_in[t] >= 0;
+nitrogen_out[t] >= 0;
+electricity[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
+min: vom_stock * nitrogen_stored[t] + vom_flow * nitrogen_in[t];
+
+#NODE NH3_PROD_RREH
+// Data from ens.dk 
+#PARAMETERS
+full_capex = 6825;  // M€ per kt/h NH3
+lifetime = 30.0;  // year
+annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // M€
+fom = 204.75; // M€/y per kt/h
+vom = 0.000105; // M€ per kt
+conversion_factor_electricity = 0.32; 
+conversion_factor_hydrogen = 0.18;
+conversion_factor_nitrogen = 0.84;
+minimum_level = 0.2;
+ramp_rate_up = 1; // hypo : stockage N2 (&H2) FR FRD =Ramp 100% within less than 30s 
+ramp_rate_down = 1; // hypo : stockage N2 FCR-D =Ramp 50% within 5s and 100% within 30s
+#VARIABLES
+internal: capacity; // kt/h
+external: electricity[T];  // GWh
+external: hydrogen[T];  // kt
+external: ammonia[T];  // kt
+external: nitrogen[T];  // kt 
+#CONSTRAINTS
+ammonia[t] <= capacity;
+minimum_level * capacity <= ammonia[t];
+hydrogen[t] == conversion_factor_hydrogen * ammonia[t];
+electricity[t] == conversion_factor_electricity * ammonia[t];
+nitrogen[t] == conversion_factor_nitrogen * ammonia[t];
+ammonia[t] <= ammonia[t-1] + ramp_rate_up * capacity;
+ammonia[t-1] <= ammonia[t] + ramp_rate_down * capacity;
+capacity >= 0;
+ammonia[t] >= 0 ;
+electricity[t] >= 0;
+hydrogen[t] >= 0;
+nitrogen[t]>= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * ammonia[t];
+
+#NODE LIQUEFIED_NH3_STORAGE_HUB_RREH
+// Capex_flow, fom_flow and vom_flow from ens.dk 
+// Capex_stock, fomm_stock and vo_stock from Eric R. Morgan, 2013
+// Efficencies from DNV.GL, october 2020
+#PARAMETERS
+full_capex_stock = 0.867; // M€ per kt
+full_capex_flow = 0.10; // M€ per kt/h 
+lifetime_stock = 30.0;  // year
+lifetime_flow = 50.0;  // year
+annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // M€
+annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // M€
+fom_stock = 0.01735;  // M€/kt-yr
+fom_flow = 0.001;  // M€/(kt/h)-yr
+vom_stock =0 ;  // M€/kt  
+vom_flow = 0;  // M€/kt
+charge_discharge_ratio = 1.0;
+self_discharge = 0.00003;
+efficiency_in = 1.0;
+efficiency_out = 1.0;
+#VARIABLES
+internal: capacity_flow;  // kt/h
+internal: capacity_stock;  // kt
+internal: liquefied_ammonia_stored[T]; // kt
+external: liquefied_ammonia_in[T]; // kt
+external: liquefied_ammonia_out[T];  // kt 
+#CONSTRAINTS
+liquefied_ammonia_in[t] <= capacity_flow;
+liquefied_ammonia_out[t] <= capacity_flow;
+liquefied_ammonia_stored[t] <= capacity_stock;
+liquefied_ammonia_stored[0] == liquefied_ammonia_stored[T-1];
+liquefied_ammonia_stored[t+1] == (1 - self_discharge) * liquefied_ammonia_stored[t] + liquefied_ammonia_in[t] - liquefied_ammonia_out[t];
+capacity_flow >= 0;
+capacity_stock >= 0;
+liquefied_ammonia_stored[t] >= 0;
+liquefied_ammonia_in[t] >= 0;
+liquefied_ammonia_out[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
+min: vom_stock * liquefied_ammonia_stored[t] + vom_flow * liquefied_ammonia_in[t];
+
+#NODE LIQUEFIED_NH3_STORAGE_DESTINATION_BE
+// Capex_flow, fom_flow and vom_flow from ens.dk 
+// Capex_stock, fomm_stock and vo_stock from Eric R. Morgan, 2013
+// Efficencies from DNV.GL, october 2020
+#PARAMETERS
+full_capex_stock = 0.867;  // M€ per kt
+full_capex_flow = 0.10;  // M€ per kt/h 
+lifetime_stock = 30.0;  // year
+lifetime_flow = 50.0;  // year
+annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // M€
+annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // M€
+fom_stock = 0.01735;  // M€/kt-yr
+fom_flow = 0.001;  // M€/(kt/h)-yr
+vom_stock = 0.0;  // M€/kt
+vom_flow = 0.0;  // M€/kt
+charge_discharge_ratio = 1.0;
+self_discharge = 0.00003;
+efficiency_in = 1.0;
+efficiency_out = 1.0;
+#VARIABLES
+internal: capacity_flow;  // kt/h
+internal: capacity_stock;  // kt
+internal: liquefied_ammonia_stored[T];  // kt
+external: liquefied_ammonia_in[T];  // kt/h
+external: liquefied_ammonia_out[T];  // kt/h
+#CONSTRAINTS
+liquefied_ammonia_in[t] <= capacity_flow;
+liquefied_ammonia_out[t] <= capacity_flow;
+liquefied_ammonia_stored[t] <= capacity_stock;
+liquefied_ammonia_stored[0] == liquefied_ammonia_stored[T-1];
+liquefied_ammonia_stored[t+1] == (1 - self_discharge) * liquefied_ammonia_stored[t] + liquefied_ammonia_in[t] - liquefied_ammonia_out[t];
+capacity_flow >= 0;
+capacity_stock >= 0;
+liquefied_ammonia_stored[t] >= 0;
+liquefied_ammonia_in[t] >= 0;
+liquefied_ammonia_out[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
+min: vom_stock * liquefied_ammonia_stored[t] + vom_flow * liquefied_ammonia_in[t];
+
+#NODE LIQUEFIED_NH3_CARRIERS_RREH
+// Data from ens.dk
+#PARAMETERS
+number_carriers = 7;
+full_capex = 1.75;  //M€ per kt
+lifetime = 20.0;  // year
+annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1);  // M€
+fom = 0.009; // M€/kt-year
+vom = 0.0;  // M€/kt
+schedule = import "../../data/carrier_schedule.csv";
+loading_time = 24;
+travel_time = 116;
+conversion_factor = 0.994;
+#VARIABLES
+internal: capacity; // kt
+external: liquefied_ammonia_in[T];  // kt/h
+external: liquefied_ammonia_out[T];  // kt/h
+#CONSTRAINTS
+liquefied_ammonia_in[t] <= schedule[t] * capacity;
+liquefied_ammonia_out[t+travel_time] == conversion_factor * liquefied_ammonia_in[t];
+liquefied_ammonia_out[t] == 0 where t < travel_time;
+capacity >= 0;
+liquefied_ammonia_in[t] >= 0;
+liquefied_ammonia_out[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity * loading_time * number_carriers;
+min: vom * liquefied_ammonia_in[t];
+
+#NODE LIQUEFIED_NH3_REGASIFICATION_BE
+// Hypothesis : data same as natural gas 
+// Data from Pospisil et al, 2019
+#PARAMETERS
+full_capex = 1248.3;  // M€/kt/h
+lifetime = 30.0;  // year
+annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // M€
+fom = 41.62; // M€/(kt/h)-year
+vom = 0.0;  // M€/kt
+conversion_factor = 0.98;
+#VARIABLES
+internal: capacity;  // kt/h
+external: liquefied_ammonia[T];  //kt
+external: ammonia[T]; // kt 
+#CONSTRAINTS
+liquefied_ammonia[t] <= capacity;
+ammonia[t] == conversion_factor * liquefied_ammonia[t];
+capacity >= 0;
+ammonia[t] >= 0;
+liquefied_ammonia[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * liquefied_ammonia[t];
+
+#HYPEREDGE INLAND_POWER_BALANCE
+#CONSTRAINTS
+SOLAR_PV_PLANTS_RREH.electricity[t] + ON_WIND_PLANTS_RREH.electricity[t] + BATTERY_STORAGE_RREH.electricity_out[t] == BATTERY_STORAGE_RREH.electricity_in[t] + HVDC_RREH.electricity_in[t];
+
+#HYPEREDGE COASTAL_POWER_BALANCE
+#CONSTRAINTS
+HVDC_RREH.electricity_out[t] == ELECTROLYSIS_PLANTS_RREH.electricity[t] + HYDROGEN_STORAGE_RREH.electricity[t] + DESALINATION_PLANTS_RREH.electricity[t] + WATER_STORAGE_RREH.electricity[t] + NH3_PROD_RREH.electricity[t] + NITROGEN_STORAGE_RREH.electricity[t] + ASU_RREH.electricity[t];
+
+#HYPEREDGE NITROGEN_BALANCE
+#CONSTRAINTS
+ASU_RREH.nitrogen[t] + NITROGEN_STORAGE_RREH.nitrogen_out[t] == NITROGEN_STORAGE_RREH.nitrogen_in[t] + NH3_PROD_RREH.nitrogen[t];
+
+#HYPEREDGE COASTAL_HYDROGEN_BALANCE
+#CONSTRAINTS
+ELECTROLYSIS_PLANTS_RREH.hydrogen[t] + HYDROGEN_STORAGE_RREH.hydrogen_out[t] == HYDROGEN_STORAGE_RREH.hydrogen_in[t] + NH3_PROD_RREH.hydrogen[t];
+
+#HYPEREDGE COASTAL_WATER_BALANCE
+#CONSTRAINTS
+DESALINATION_PLANTS_RREH.water[t] + WATER_STORAGE_RREH.water_out[t] == WATER_STORAGE_RREH.water_in[t] + ELECTROLYSIS_PLANTS_RREH.water[t];
+
+#HYPEREDGE COASTAL_LIQUEFIED_NH3_BALANCE
+#CONSTRAINTS
+NH3_PROD_RREH.ammonia[t] + LIQUEFIED_NH3_STORAGE_HUB_RREH.liquefied_ammonia_out[t] == LIQUEFIED_NH3_STORAGE_HUB_RREH.liquefied_ammonia_in[t] + LIQUEFIED_NH3_CARRIERS_RREH.liquefied_ammonia_in[t];
+
+#HYPEREDGE DESTINATION_LIQUEFIED_NH3_BALANCE
+#CONSTRAINTS
+LIQUEFIED_NH3_CARRIERS_RREH.liquefied_ammonia_out[t] + LIQUEFIED_NH3_STORAGE_DESTINATION_BE.liquefied_ammonia_out[t] == LIQUEFIED_NH3_STORAGE_DESTINATION_BE.liquefied_ammonia_in[t] + LIQUEFIED_NH3_REGASIFICATION_BE.liquefied_ammonia[t] ;
+
+#HYPEREDGE DESTINATION_GAS_NH3_BALANCE
+#PARAMETERS
+demand = import "../../data/NH3_demand.csv";
+#CONSTRAINTS
+LIQUEFIED_NH3_REGASIFICATION_BE.ammonia[t] == demand[t];

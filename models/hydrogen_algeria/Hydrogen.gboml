@@ -1,0 +1,216 @@
+#TIMEHORIZON
+T=43800;  // hours 
+
+#GLOBAL
+//wacc = 0.07;
+number_years_horizon = T/8760;
+
+#NODE SOLAR_PV_PLANTS_RREH = import SOLAR_PV_PLANTS_DZ from "..\..\templates\GENERAL.gboml";
+
+#NODE ON_WIND_PLANTS_RREH = import ON_WIND_PLANTS_DZ from "..\..\templates\GENERAL.gboml";
+
+#NODE BATTERY_STORAGE_RREH = import BATTERY_STORAGE_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE HVDC_RREH = import HVDC_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE ELECTROLYSIS_PLANTS_RREH = import ELECTROLYSIS_PLANTS_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE DESALINATION_PLANTS_RREH = import DESALINATION_PLANTS_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE HYDROGEN_STORAGE_RREH = import HYDROGEN_STORAGE_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE WATER_STORAGE_RREH = import WATER_STORAGE_RREH from "..\..\templates\GENERAL.gboml";
+
+#NODE HYDROGEN_LIQUEFACTION_PLANTS_RREH
+// Data from DNV.GL, october 2020
+// Conversion factor for electricity from Connelly et al, 2019
+#PARAMETERS
+full_capex = 45000.0; //M€ / Kt/h
+lifetime = 40.0; // year
+annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+fom = 1125.0; // M€/(kt/h)-year
+vom = 0.0;  // M€/kt 
+conversion_factor_electricity = 12;
+conversion_factor_hydrogen = 1.0;
+minimum_level = 1.0;
+ramp_rate_up = 0.0;
+ramp_rate_down = 0.0;
+#VARIABLES
+internal: capacity;  // kt/h
+external: electricity[T];  // GWh
+external: hydrogen[T];  // kt/h
+external: liquefied_hydrogen[T]; // kt /h
+#CONSTRAINTS
+liquefied_hydrogen[t] <= capacity;
+minimum_level * capacity <= liquefied_hydrogen[t];
+electricity[t] == conversion_factor_electricity * liquefied_hydrogen[t];
+hydrogen[t] == conversion_factor_hydrogen * liquefied_hydrogen[t];
+liquefied_hydrogen[t] <= liquefied_hydrogen[t-1] + ramp_rate_up * capacity;
+liquefied_hydrogen[t-1] <= liquefied_hydrogen[t] + ramp_rate_down * capacity;
+capacity >= 0;
+electricity[t] >= 0;
+liquefied_hydrogen[t] >= 0;
+hydrogen[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * liquefied_hydrogen[t];
+
+#NODE HYDROGEN_STORAGE_HUB_RREH
+// Data from ens.dk
+#PARAMETERS
+full_capex_stock = 25; // M€/ Kt
+full_capex_flow = 0.0; //M€ /kt/h 
+lifetime_stock = 30.0;  // year
+lifetime_flow = 30.0;  // year 
+annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // MEur
+annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // MEur
+fom_flow = 0.0;  // M€/(kt/h)-yr
+fom_stock = 0.5; // M€/kt-yr
+vom_flow = 0.0;  // M€/kt
+vom_stock = 0.0;  // M€/kt 
+charge_discharge_ratio = 1.0;
+self_discharge = 0.00008;
+efficiency_in = 1.0;
+efficiency_out = 1.0;
+#VARIABLES
+internal: capacity_flow; // kt/h
+internal: capacity_stock;  // kt
+internal: liquefied_hydrogen_stored[T]; // kt 
+external: liquefied_hydrogen_in[T];  // kt/h
+external: liquefied_hydrogen_out[T];  // kt/h
+#CONSTRAINTS
+liquefied_hydrogen_in[t] <= capacity_flow;
+liquefied_hydrogen_out[t] <= capacity_flow;
+liquefied_hydrogen_stored[t] <= capacity_stock;
+liquefied_hydrogen_stored[0] == liquefied_hydrogen_stored[T-1];
+liquefied_hydrogen_stored[t+1] == (1 - self_discharge) * liquefied_hydrogen_stored[t] + efficiency_in * liquefied_hydrogen_in[t] - liquefied_hydrogen_out[t] / efficiency_out;
+capacity_flow >= 0;
+capacity_stock >= 0;
+liquefied_hydrogen_stored[t] >= 0;
+liquefied_hydrogen_in[t] >= 0;
+liquefied_hydrogen_out[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
+min: vom_stock * liquefied_hydrogen_stored[t] + vom_flow * liquefied_hydrogen_in[t];
+
+#NODE LIQUEFIED_HYDROGEN_CARRIERS_RREH
+// Data from ens.dk
+#PARAMETERS
+number_carriers = 7;
+full_capex = 14; //M€ /Kt
+lifetime = 30.0;  // year
+annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+fom = 0.07; // MEur/kt-year
+vom = 0.0;
+schedule = import "../../data/carrier_schedule.csv";
+loading_time = 24;
+travel_time = 116;
+conversion_factor = 0.945;
+#VARIABLES
+internal: capacity;  // kt
+external: liquefied_hydrogen_in[T];  // kt/h
+external: liquefied_hydrogen_out[T];  // kt/h
+#CONSTRAINTS
+liquefied_hydrogen_in[t] <= schedule[t] * capacity;
+liquefied_hydrogen_out[t+travel_time] == conversion_factor * liquefied_hydrogen_in[t];
+liquefied_hydrogen_out[t] == 0 where t < travel_time;
+capacity >= 0;
+liquefied_hydrogen_in[t] >= 0;
+liquefied_hydrogen_out[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity * loading_time * number_carriers;
+min: vom * liquefied_hydrogen_in[t];
+
+#NODE HYDROGEN_STORAGE_DESTINATION_BE
+// Data from ens.dk
+#PARAMETERS
+full_capex_stock = 25; // M€/kt
+full_capex_flow = 0.0;  // M€/kt/h
+lifetime_stock = 30.0;  // year 
+lifetime_flow = 30.0;  // year 
+annualised_capex_stock = full_capex_stock * global.wacc * (1 + global.wacc)**lifetime_stock / ((1 + global.wacc)**lifetime_stock - 1); // MEur
+annualised_capex_flow = full_capex_flow * global.wacc * (1 + global.wacc)**lifetime_flow / ((1 + global.wacc)**lifetime_flow - 1); // MEur
+fom_stock = 0.5;  // M€/kt-yr
+fom_flow = 0.0;  // M€/(kt/h)-yr
+vom_stock = 0.0;  // M€/kt
+vom_flow = 0.0;  // M€/kt
+charge_discharge_ratio = 1.0;
+self_discharge = 0.00008;
+efficiency_in = 1.0;
+efficiency_out = 1.0;
+#VARIABLES
+internal: capacity_flow;  // kt/h
+internal: capacity_stock;  // kt
+internal: liquefied_hydrogen_stored[T];  // kt
+external: liquefied_hydrogen_in[T];  // kt/h
+external: liquefied_hydrogen_out[T];  // kt/h
+#CONSTRAINTS
+liquefied_hydrogen_in[t] <= capacity_flow;
+liquefied_hydrogen_out[t] <= capacity_flow;
+liquefied_hydrogen_stored[t] <= capacity_stock;
+liquefied_hydrogen_stored[0] == liquefied_hydrogen_stored[T-1];
+liquefied_hydrogen_stored[t+1] == (1 - self_discharge) * liquefied_hydrogen_stored[t] + efficiency_in * liquefied_hydrogen_in[t] - liquefied_hydrogen_out[t] / efficiency_out;
+capacity_flow >= 0;
+capacity_stock >= 0;
+liquefied_hydrogen_stored[t] >= 0;
+liquefied_hydrogen_in[t] >= 0;
+liquefied_hydrogen_out[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex_stock + fom_stock) * capacity_stock + global.number_years_horizon * (annualised_capex_flow + fom_flow) * capacity_flow;
+min: vom_stock * liquefied_hydrogen_stored[t] + vom_flow * liquefied_hydrogen_in[t];
+
+#NODE LIQUEFIED_HYDROGEN_REGASIFICATION_BE
+// Data from DNV.GL, octobre 2020
+#PARAMETERS
+full_capex = 9099.909; //M€/kt/h
+lifetime = 30.0;  // year
+annualised_capex = full_capex * global.wacc * (1 + global.wacc)**lifetime / ((1 + global.wacc)**lifetime - 1); // MEur
+fom = 227.498; // MEur/(kt/h)-year
+vom = 0.0;  // M€/kt
+conversion_factor = 1;
+#VARIABLES
+internal: capacity;  // kt/h
+external: liquefied_hydrogen[T];  // kt/h
+external: hydrogen[T];  // kt/h
+#CONSTRAINTS
+liquefied_hydrogen[t] <= capacity;
+hydrogen[t] == conversion_factor * liquefied_hydrogen[t];
+capacity >= 0;
+hydrogen[t] >= 0;
+liquefied_hydrogen[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * liquefied_hydrogen[t];
+
+#HYPEREDGE INLAND_POWER_BALANCE
+#CONSTRAINTS
+SOLAR_PV_PLANTS_RREH.electricity[t] + ON_WIND_PLANTS_RREH.electricity[t] + BATTERY_STORAGE_RREH.electricity_out[t] == BATTERY_STORAGE_RREH.electricity_in[t] + HVDC_RREH.electricity_in[t];
+
+#HYPEREDGE COASTAL_POWER_BALANCE
+#CONSTRAINTS
+HVDC_RREH.electricity_out[t] == ELECTROLYSIS_PLANTS_RREH.electricity[t] + HYDROGEN_STORAGE_RREH.electricity[t] + DESALINATION_PLANTS_RREH.electricity[t] + WATER_STORAGE_RREH.electricity[t] + HYDROGEN_LIQUEFACTION_PLANTS_RREH.electricity[t];
+
+#HYPEREDGE COASTAL_HYDROGEN_BALANCE
+#CONSTRAINTS
+ELECTROLYSIS_PLANTS_RREH.hydrogen[t] + HYDROGEN_STORAGE_RREH.hydrogen_out[t] == HYDROGEN_STORAGE_RREH.hydrogen_in[t] + HYDROGEN_LIQUEFACTION_PLANTS_RREH.hydrogen[t];
+
+#HYPEREDGE COASTAL_WATER_BALANCE
+#CONSTRAINTS
+DESALINATION_PLANTS_RREH.water[t] + WATER_STORAGE_RREH.water_out[t] == WATER_STORAGE_RREH.water_in[t] + ELECTROLYSIS_PLANTS_RREH.water[t] ;
+
+#HYPEREDGE COASTAL_LIQUEFIED_HYDROGEN_BALANCE
+#CONSTRAINTS
+HYDROGEN_LIQUEFACTION_PLANTS_RREH.hydrogen[t] + HYDROGEN_STORAGE_HUB_RREH.liquefied_hydrogen_out[t] == HYDROGEN_STORAGE_HUB_RREH.liquefied_hydrogen_in[t] + LIQUEFIED_HYDROGEN_CARRIERS_RREH.liquefied_hydrogen_in[t];
+
+#HYPEREDGE DESTINATION_LIQUEFIED_HYDROGEN_BALANCE
+#CONSTRAINTS
+LIQUEFIED_HYDROGEN_CARRIERS_RREH.liquefied_hydrogen_out[t] + HYDROGEN_STORAGE_DESTINATION_BE.liquefied_hydrogen_out[t] == HYDROGEN_STORAGE_DESTINATION_BE.liquefied_hydrogen_in[t] + LIQUEFIED_HYDROGEN_REGASIFICATION_BE.liquefied_hydrogen[t];
+
+#HYPEREDGE DESTINATION_GAS_H2_BALANCE
+#PARAMETERS
+demand = import "../../data/H2_demand.csv";
+#CONSTRAINTS
+LIQUEFIED_HYDROGEN_REGASIFICATION_BE.hydrogen[t] == demand[t];
+
+
+

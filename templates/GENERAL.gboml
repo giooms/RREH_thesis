@@ -5,6 +5,48 @@ T=43800;  // hours
 wacc = 0.07;
 number_years_horizon = T/8760;
 
+#NODE SOLAR_PV_PLANTS_DZ
+#PARAMETERS
+full_capex = 380.0;
+lifetime = 25.0;
+annualised_capex = full_capex * global.solar_wacc * (1 + global.solar_wacc)**lifetime / ((1 + global.solar_wacc)**lifetime - 1); // MEur
+fom = 9.5; // MEur/year
+vom = 0.0;
+capacity_factor_PV = import "../data/pv_capacity_factors_DZ.csv"; // Dimensionless
+max_capacity = 500.0; // GW
+#VARIABLES
+internal: capacity;
+external: electricity[T];
+#CONSTRAINTS
+electricity[t] <= capacity_factor_PV[t] * capacity;
+capacity <= max_capacity;
+capacity >= 0;
+electricity[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * electricity[t];
+
+#NODE ON_WIND_PLANTS_DZ
+#PARAMETERS
+full_capex = 1110.0;
+lifetime = 30.0;
+annualised_capex = full_capex * global.onshore_wacc * (1 + global.onshore_wacc)**lifetime / ((1 + global.onshore_wacc)**lifetime - 1); // MEur
+fom = 13.4; // MEur/year
+vom = 0.00144; // MEur/GWh
+capacity_factor_wind = import "../data/wind_capacity_factors_DZ.csv"; // Dimensionless
+max_capacity = 500.0; // GW
+#VARIABLES
+internal: capacity;
+external: electricity[T];
+#CONSTRAINTS
+electricity[t] <= capacity_factor_wind[t] * capacity;
+capacity <= max_capacity;
+capacity >= 0;
+electricity[t] >= 0;
+#OBJECTIVES
+min: global.number_years_horizon * (annualised_capex + fom) * capacity;
+min: vom * electricity[t];
+
 #NODE OFF_WIND_PLANTS_RREH
     #PARAMETERS
         full_capex = 1800; // MEur/GW --> source = Denmark 2030
@@ -18,7 +60,7 @@ number_years_horizon = T/8760;
         internal: capacity;
         external: electricity[T];
     #CONSTRAINTS
-        electricity[t] == capacity_factor_off_wind[t] * capacity;
+        electricity[t] <= capacity_factor_off_wind[t] * capacity;
         capacity <= max_capacity;
         capacity >= 0;
         electricity[t] >= 0;
@@ -39,7 +81,7 @@ number_years_horizon = T/8760;
     internal: capacity;
     external: electricity[T];
     #CONSTRAINTS
-    electricity[t] == capacity_factor_wind[t] * capacity;
+    electricity[t] <= capacity_factor_wind[t] * capacity;
     capacity <= max_capacity;
     capacity >= 0;
     electricity[t] >= 0;
@@ -240,7 +282,7 @@ min: vom_stock * electricity_stored[t] + vom_flow * electricity_in[t];
 #NODE HVDC_RREH
 // Berger et al. 2019 have been used for the node
 #PARAMETERS
-full_capex_lines = 0.25*100;  // M€/GW
+full_capex_lines = 0.25*1000;  // M€/GW
 full_capex_stations = 2*115.0;  // M€/GW
 lifetime_lines = 40.0;  // year
 lifetime_stations = 40.0;  // year
