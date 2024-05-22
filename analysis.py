@@ -797,7 +797,7 @@ def plot_typical_weeks_prod(d, results_path, scenario, timehorizon, report=False
             ch4_liquefaction = typical_week(np.array(d.solution.elements.METHANE_LIQUEFACTION_PLANTS_RREH.variables.electricity.values))
 
     # Set up the figure and subplots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7))
     time = np.arange(hours_per_week) / 24
 
     # Plotting production
@@ -893,8 +893,7 @@ def plot_typical_weeks_prod(d, results_path, scenario, timehorizon, report=False
     handles1, labels1 = handles1[::-1], labels1[::-1]
     handles2, labels2 = handles2[::-1], labels2[::-1]
 
-    if scenario == 'ammonia':
-        fig.subplots_adjust(wspace=0.3)  # Increase the spacing between subplots
+    fig.subplots_adjust(wspace=0.3)  # Increase the spacing between subplots
 
 
     ax1.legend(handles1 + handles3, labels1 + labels3, loc='lower right', fontsize='medium')
@@ -917,7 +916,7 @@ def plot_typical_weeks_prod(d, results_path, scenario, timehorizon, report=False
         ax1.set_title(f'Electricity Production for {scenario} Scenario')
         ax2.set_title(f'Electricity Consumption for {scenario} Scenario')
     
-    fig.savefig(plot_path)
+    fig.savefig(plot_path, bbox_inches='tight')
     plt.close(fig)
 
 def conversion_factor(d, scenario):
