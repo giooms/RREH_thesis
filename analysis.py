@@ -551,7 +551,7 @@ def plot_production_dynamics(d, plant_capacities, results_path, scenario, timeho
             ax.axhline(y=0, color='k', linestyle='--')
             ax.set_ylim(-0.1, 0.1)
         else:
-            ax.fill_between(data_series.index, data_series['production'], color=color, label='Electricity Production')
+            ax.fill_between(data_series.index, data_series['production'], color=color, label=f'{production_type} Electricity Production')
         
         # Calculate capacity factor
         capacity = plant_capacities.get(production_type, 0)
@@ -561,17 +561,16 @@ def plot_production_dynamics(d, plant_capacities, results_path, scenario, timeho
 
         ax.axhline(y=capacity_factor_line, color='red', linestyle='--', label='Capacity Factor')
         
-        ax.set_ylabel('GWh')
-        # Set the x-axis to show major ticks for each year and minor ticks every 3 months
+        ax.set_ylabel('GWh', fontsize=14)  # Increase font size of y-axis label
+        ax.tick_params(axis='both', which='major', labelsize=12)  # Increase font size of tick labels
         ax.xaxis.set_major_locator(mdates.YearLocator())
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
         ax.xaxis.set_minor_locator(mdates.MonthLocator(interval=3))
         ax.xaxis.set_minor_formatter(mdates.DateFormatter('%b'))
         ax.tick_params(axis='x', which='major', length=10)
         ax.tick_params(axis='x', which='minor', length=5)
-        # Ensure the x-axis labels do not overlap
         plt.setp(ax.get_xticklabels(minor=True), rotation=0, ha='center')
-        ax.legend()
+        ax.legend(loc='lower right', fontsize=12)  # Increase font size of legend
 
     # Set the x-axis limits to the start and end dates
     plt.xlim(pd.Timestamp(start_date), pd.Timestamp(end_date))
@@ -597,64 +596,127 @@ def plot_production_dynamics(d, plant_capacities, results_path, scenario, timeho
     # Calculate onshore and offshore data for load factors
     if scenario in ['hydro_wind', 'methanol', 'ammonia', 'hydrogen']:
         onshore_data = np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.electricity.values) / \
-                    np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.capacity.values)
+                       np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.capacity.values)
 
         offshore_data = np.array(d.solution.elements.OFF_WIND_PLANTS_RREH.variables.electricity.values) / \
                         np.array(d.solution.elements.OFF_WIND_PLANTS_RREH.variables.capacity.values)
 
         total_hours = len(onshore_data)
+        dates = pd.date_range(start='2015-01-01', periods=total_hours, freq='H')
         data = pd.DataFrame({
             'onshore': onshore_data,
             'offshore': offshore_data,
-            'hour': np.tile(np.arange(24), total_hours // 24 + 1)[:total_hours]
+            'datetime': dates
         })
-
-        years = total_hours // (24 * 365)
-        leap_years = (years + 1) // 4
-
-        dayofyear = []
-        for year in range(years):
-            days_in_year = 366 if (2015 + year) % 4 == 0 else 365
-            dayofyear.extend(np.tile(np.arange(1, days_in_year + 1), 24))
-        dayofyear = np.array(dayofyear)
-
-        remaining_hours = total_hours - len(dayofyear)
-        if remaining_hours > 0:
-            remaining_days = (remaining_hours // 24) + 1
-            dayofyear = np.append(dayofyear, np.tile(np.arange(1, remaining_days + 1), 24)[:remaining_hours])
-
-        data['dayofyear'] = dayofyear[:total_hours]
-
-        diurnal_pattern = data.groupby('hour').mean()
-        seasonal_pattern = data.groupby('dayofyear').mean()
 
         # Calculate the combined capacity factor
         onshore_capacity = plant_capacities.get('ON_WIND_PLANTS_RREH', 0)
         offshore_capacity = plant_capacities.get('OFF_WIND_PLANTS_RREH', 0)
-        combined_capacity_factor = (seasonal_pattern['onshore'] * onshore_capacity + seasonal_pattern['offshore'] * offshore_capacity)
+        data['combined_capacity_factor'] = (data['onshore'] * onshore_capacity + data['offshore'] * offshore_capacity)
 
-        plt.figure(figsize=(12, 6))
-        plt.subplot(1, 2, 1)
-        plt.plot(diurnal_pattern['onshore'], label='Onshore')
-        plt.plot(diurnal_pattern['offshore'], label='Offshore')
-        plt.legend()
-        plt.xlabel('Hour of Day')
-        plt.ylabel('Average Load Factor')
+        # Resample data to weekly averages
+        weekly_data = data.resample('2W', on='datetime').mean()
 
-        plt.subplot(1, 2, 2)
-        plt.plot(seasonal_pattern['onshore'], label='Onshore')
-        plt.plot(seasonal_pattern['offshore'], label='Offshore')
-        plt.ylim(0, 1)  # Set the y-axis limits from 0 to 1
+        fig, ax1 = plt.subplots(figsize=(15, 3))
 
-        ax2 = plt.gca().twinx()
-        ax2.fill_between(seasonal_pattern.index, 0, seasonal_pattern['onshore'] * onshore_capacity, color='lightgrey', alpha=0.5, label='Onshore Production')
-        ax2.fill_between(seasonal_pattern.index, seasonal_pattern['onshore'] * onshore_capacity, combined_capacity_factor, color='darkgrey', alpha=0.5, label='Offshore Production')
-        ax2.set_ylabel('Combined Production (GWh)')
-        ax2.legend(loc='upper right')
+        # Plotting the weekly averaged data
+        ax1.plot(weekly_data.index, weekly_data['onshore'], label='Onshore', linewidth=2)
+        ax1.plot(weekly_data.index, weekly_data['offshore'], label='Offshore', linewidth=2)
+        ax1.set_ylim(0, 1)  # Set the y-axis limits from 0 to 1
+        ax1.set_xlim(pd.Timestamp('2015-01-01'), pd.Timestamp('2020-01-01'))  # Set the x-axis limits from 2015-01-01 to 2020-01-01
+        ax1.set_ylabel('Load Factor', fontsize=14)
+        ax1.tick_params(axis='both', which='major', labelsize=12)
+        ax1.xaxis.set_major_locator(mdates.YearLocator())
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+        ax1.xaxis.set_minor_locator(mdates.MonthLocator(interval=3))
+        ax1.xaxis.set_minor_formatter(mdates.DateFormatter('%b'))
+        ax1.tick_params(axis='x', which='major', length=10)
+        ax1.tick_params(axis='x', which='minor', length=5)
+        plt.setp(ax1.get_xticklabels(minor=True), rotation=0, ha='center')
+        handles1, labels1 = ax1.get_legend_handles_labels()
 
-        plt.tight_layout()
-        plt.savefig(os.path.join(img_folder_path, f'diurnal_seasonal_wind_{scenario}_{wacc_label}.pdf'))
+        ax2 = ax1.twinx()
+        ax2.fill_between(weekly_data.index, 0, weekly_data['onshore'] * onshore_capacity, color='lightgrey', alpha=0.3, label='Onshore Production')
+        ax2.fill_between(weekly_data.index, weekly_data['onshore'] * onshore_capacity, weekly_data['combined_capacity_factor'], color='darkgrey', alpha=0.3, label='Offshore Production')
+        ax2.set_ylim(0, max(weekly_data['combined_capacity_factor'])*1.1)
+        ax2.set_ylabel('Combined Production (GWh)', fontsize=14)
+        ax2.tick_params(axis='both', which='major', labelsize=12)
+        handles2, labels2 = ax2.get_legend_handles_labels()
+
+        ax1.legend(handles=handles1, labels=labels1, loc='upper left', fontsize=12)
+        ax2.legend(handles=handles2, labels=labels2, loc='upper right', fontsize=12)
+
+        fig.tight_layout()
+        img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
+        img_folder_path = os.path.join(results_path, img_folder_name)
+        if not os.path.exists(img_folder_path):
+            os.makedirs(img_folder_path)
+        plt.savefig(os.path.join(img_folder_path, f'diurnal_seasonal_wind_{scenario}_{wacc_label}.pdf'), bbox_inches='tight')
         plt.close()
+
+    # Calculate onshore and offshore data for load factors
+    if scenario in ['algeria', 'methanol_algeria', 'ammonia_algeria', 'hydrogen_algeria']:
+        onshore_data = np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.electricity.values) / \
+                       np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.capacity.values)
+
+        pv_data = np.array(d.solution.elements.SOLAR_PV_PLANTS_RREH.variables.electricity.values) / \
+                        np.array(d.solution.elements.SOLAR_PV_PLANTS_RREH.variables.capacity.values)
+
+        total_hours = len(onshore_data)
+        dates = pd.date_range(start='2015-01-01', periods=total_hours, freq='H')
+        onshore_data = onshore_data[:len(dates)]
+        pv_data = pv_data[:len(dates)]
+        data = pd.DataFrame({
+            'onshore': onshore_data,
+            'solar pv': pv_data,
+            'datetime': dates
+        })
+
+        # Calculate the combined capacity factor
+        onshore_capacity = plant_capacities.get('ON_WIND_PLANTS_RREH', 0)
+        pv_capacity = plant_capacities.get('SOLAR_PV_PLANTS_RREH', 0)
+        data['combined_capacity_factor'] = (data['onshore'] * onshore_capacity + data['solar pv'] * pv_capacity)
+
+        # Resample data to weekly averages
+        weekly_data = data.resample('2W', on='datetime').mean()
+
+        fig, ax1 = plt.subplots(figsize=(15, 3))
+
+        # Plotting the weekly averaged data
+        ax1.plot(weekly_data.index, weekly_data['onshore'], label='Onshore', linewidth=2)
+        ax1.plot(weekly_data.index, weekly_data['solar pv'], label='Solar PV', linewidth=2)
+        ax1.set_ylim(0, 1)  # Set the y-axis limits from 0 to 1
+        ax1.set_xlim(pd.Timestamp('2015-01-01'), pd.Timestamp('2020-01-01'))  # Set the x-axis limits from 2015-01-01 to 2020-01-01
+        ax1.set_ylabel('Load Factor', fontsize=14)
+        ax1.tick_params(axis='both', which='major', labelsize=12)
+        ax1.xaxis.set_major_locator(mdates.YearLocator())
+        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+        ax1.xaxis.set_minor_locator(mdates.MonthLocator(interval=3))
+        ax1.xaxis.set_minor_formatter(mdates.DateFormatter('%b'))
+        ax1.tick_params(axis='x', which='major', length=10)
+        ax1.tick_params(axis='x', which='minor', length=5)
+        plt.setp(ax1.get_xticklabels(minor=True), rotation=0, ha='center')
+        handles1, labels1 = ax1.get_legend_handles_labels()
+
+        ax2 = ax1.twinx()
+        ax2.fill_between(weekly_data.index, 0, weekly_data['onshore'] * onshore_capacity, color='lightgrey', alpha=0.5, label='Onshore Production')
+        ax2.fill_between(weekly_data.index, weekly_data['onshore'] * onshore_capacity, weekly_data['combined_capacity_factor'], color='darkgrey', alpha=0.5, label='Solar PV Production')
+        ax2.set_ylabel('Combined Production (GWh)', fontsize=14)
+        ax2.tick_params(axis='both', which='major', labelsize=12)
+        ax2.set_ylim(0, max(weekly_data['combined_capacity_factor'])*1.1)
+        handles2, labels2 = ax2.get_legend_handles_labels()
+
+        ax1.legend(handles=handles1, labels=labels1, loc='upper left', fontsize=12)
+        ax2.legend(handles=handles2, labels=labels2, loc='upper right', fontsize=12)
+
+        fig.tight_layout()
+        img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
+        img_folder_path = os.path.join(results_path, img_folder_name)
+        if not os.path.exists(img_folder_path):
+            os.makedirs(img_folder_path)
+        plt.savefig(os.path.join(img_folder_path, f'diurnal_seasonal_wind_{scenario}_{wacc_label}.pdf'), bbox_inches='tight')
+        plt.close()
+
     return production_data_normalized
 
 def plot_basin_dynamics(d, results_path, scenario, timehorizon, wacc_label, start_date='2015-01-01'):
@@ -689,7 +751,7 @@ def plot_basin_dynamics(d, results_path, scenario, timehorizon, wacc_label, star
             ax.set_ylabel('Volume (TCM/h)')
             ax.set_ylim(bottom=0)
 
-        plt.xticks(rotation=45)
+        plt.xticks(rotation=0)
         plt.xlabel('Time')
         fig.tight_layout()
 
@@ -730,11 +792,18 @@ def plot_storage_dynamics(d, results_path, scenario, timehorizon, wacc_label, st
             ax.set_ylim(-0.1, 0.1)
         else:
             ax.plot(date_range, data_series, label=label, color=color)
-        ax.set_title(label, fontsize=10, loc='left')
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
-        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))  # Show every 3 months
-        ax.set_ylabel('GWh' if 'Battery' in label else 'kt')  # Adjust y-axis labels
-        ax.legend(loc='upper right')
+        
+        ax.set_ylabel('GWh' if 'Battery' in label else 'kt', fontsize=14)
+        ax.tick_params(axis='both', which='major', labelsize=12)
+        ax.legend(loc='upper right', fontsize=12)
+
+    axs[-1].xaxis.set_major_locator(mdates.YearLocator())
+    axs[-1].xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    axs[-1].xaxis.set_minor_locator(mdates.MonthLocator(interval=3))
+    axs[-1].xaxis.set_minor_formatter(mdates.DateFormatter('%b'))
+    axs[-1].tick_params(axis='x', which='major', length=10)
+    axs[-1].tick_params(axis='x', which='minor', length=5)
+    plt.setp(axs[-1].get_xticklabels(minor=True), rotation=0, ha='center')
 
     fig.tight_layout()
 
@@ -745,9 +814,114 @@ def plot_storage_dynamics(d, results_path, scenario, timehorizon, wacc_label, st
     storage_dynamics_fig_path = os.path.join(img_folder_path, f"{scenario}_storage_dynamics.png")
     storage_dynamics_pdf_path = os.path.join(img_folder_path, f"{scenario}_storage_dynamics.pdf")
     
-    fig.savefig(storage_dynamics_fig_path)
-    fig.savefig(storage_dynamics_pdf_path)
+    fig.savefig(storage_dynamics_fig_path, bbox_inches='tight')
+    fig.savefig(storage_dynamics_pdf_path, bbox_inches='tight')
     plt.close(fig)
+
+def plot_hydrogen_dynamics(d, results_path, scenario, timehorizon, wacc_label):
+    def debug_print(name, array):
+        if isinstance(array, np.ndarray):
+            print(name, array.shape)
+            print(array[:5])
+
+    colors_prod = ['steelblue', 'lightblue']
+
+    electrolyzer_H2 = np.array(d.solution.elements.ELECTROLYSIS_PLANTS_RREH.variables.hydrogen.values)
+    h2_storage_out = np.array(d.solution.elements.HYDROGEN_STORAGE_RREH.variables.hydrogen_out.values)
+    production_data = pd.DataFrame({
+        'Electrolyzer output': electrolyzer_H2,
+        '$H_{2}$ Storage output': h2_storage_out,
+    })
+
+    hydrogen_prod = np.sum(electrolyzer_H2) #in kt
+
+    if scenario in ['ammonia', 'ammonia_algeria']:
+        nh3_prod = np.array(d.solution.elements.NH3_PROD_RREH.variables.hydrogen.values)
+        total_consumption = nh3_prod
+        labels = ['Electrolyzer output', '$H_{2}$ Storage output', 'NH3 Production']
+
+        consumption_data = pd.DataFrame({
+            'Total Consumption': total_consumption,
+        })
+    elif scenario in ['hydrogen', 'hydrogen_algeria']:
+        liquefaction_h2 = np.array(d.solution.elements.HYDROGEN_LIQUEFACTION_PLANTS_RREH.variables.hydrogen.values)
+        total_consumption = liquefaction_h2
+        labels = ['Electrolyzer H2', '$H_{2}$ Storage output', 'Liquefaction H2']
+
+        consumption_data = pd.DataFrame({
+            'Total Consumption': total_consumption,
+        })
+    elif scenario in ['methanol', 'methanol_algeria']:
+        methanol_H2 = np.array(d.solution.elements.METHANOL_PLANTS_RREH.variables.hydrogen.values)
+        dac_H2 = np.array(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_RREH.variables.hydrogen.values)
+        total_consumption = methanol_H2 + dac_H2
+        labels = ['Electrolyzer H2', '$H_{2}$ Storage output', 'Methanol H2', 'DAC H2']
+
+        consumption_data = pd.DataFrame({
+            'Total Consumption': total_consumption,
+        })
+    elif scenario in ['hydro_wind', 'algeria']:
+        methanation_H2 = np.array(d.solution.elements.METHANATION_PLANTS_RREH.variables.hydrogen.values)
+        dac_H2 = np.array(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_RREH.variables.hydrogen.values)
+        total_consumption = methanation_H2 + dac_H2
+        labels = ['Electrolyzer H2', '$H_{2}$ Storage output', 'Methanation H2', 'DAC H2']
+
+        consumption_data = pd.DataFrame({
+            'Total Consumption': total_consumption,
+        })
+    else:
+        return
+
+    # Create a time index with datetime for resampling
+    time_index = pd.date_range(start='2015-01-01', periods=len(production_data), freq='H')
+    production_data['Time'] = time_index
+    consumption_data['Time'] = time_index
+    production_data.set_index('Time', inplace=True)
+    consumption_data.set_index('Time', inplace=True)
+
+    # Resample the data to 2-week averages
+    production_data = production_data.resample('2W').mean()
+    consumption_data = consumption_data.resample('2W').mean()
+
+    # Plot the data
+    fig, ax1 = plt.subplots(figsize=(14, 3))
+
+    # Plot production data
+    cumulative_sum = np.zeros_like(production_data.iloc[:, 0])
+    for column, color in zip(production_data.columns, colors_prod):
+        ax1.fill_between(production_data.index, cumulative_sum, cumulative_sum + production_data[column], label=column, color=color, alpha=0.8)
+        cumulative_sum += production_data[column]
+    ax1.set_ylabel('$H_{2}$ Flows (kt/h)', fontsize=14)
+    ax1.legend(fontsize=12)
+    ax1.grid(True)
+    ax1.tick_params(axis='both', which='major', labelsize=12)
+
+    # Plot total consumption line
+    ax1.plot(consumption_data.index, consumption_data['Total Consumption'], label='Total $H_{2}$ Consumption', color='red', linewidth=2)
+    
+    ax1.xaxis.set_major_locator(mdates.YearLocator())
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    ax1.xaxis.set_minor_locator(mdates.MonthLocator(interval=3))
+    ax1.xaxis.set_minor_formatter(mdates.DateFormatter('%b'))
+    ax1.tick_params(axis='x', which='major', length=10)
+    ax1.tick_params(axis='x', which='minor', length=5)
+    plt.setp(ax1.get_xticklabels(minor=True), rotation=0, ha='center')
+    plt.xlim(pd.Timestamp('2015-01-01'), pd.Timestamp('2020-01-01'))
+
+    handles1, labels1 = ax1.get_legend_handles_labels()
+    handles1, labels1 = handles1[::-1], labels1[::-1]
+    ax1.legend(handles1, labels1, loc='lower right', fontsize=12)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+
+    img_folder_name = f"img_{timehorizon}/{wacc_label}" if timehorizon else "img_all"
+    img_folder_path = os.path.join(results_path, img_folder_name)
+    if not os.path.exists(img_folder_path):
+        os.makedirs(img_folder_path)
+    plt.savefig(os.path.join(img_folder_path, f'hydrogen_dynamics_{scenario}.pdf'), bbox_inches='tight')
+    plt.close()
+
+    return hydrogen_prod
 
 def plot_typical_weeks_prod(d, results_path, scenario, timehorizon, report=False):
     hours_per_week = 24 * 7
@@ -763,33 +937,58 @@ def plot_typical_weeks_prod(d, results_path, scenario, timehorizon, report=False
         return np.mean(reshaped_data, axis=0)
 
     # Electricity Production (GW)
-    onshore = typical_week(np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.electricity.values))
-    offshore = typical_week(np.array(d.solution.elements.OFF_WIND_PLANTS_RREH.variables.electricity.values))
-    hydro = typical_week(np.sum([np.array(d.solution.elements.HYDRO_PLANT_03h_RREH.variables.electricity.values),
-                    np.array(d.solution.elements.HYDRO_PLANT_03j_RREH.variables.electricity.values),
-                    np.array(d.solution.elements.HYDRO_PLANT_05h_RREH.variables.electricity.values)], axis=0))
+    onshore = np.array(d.solution.elements.ON_WIND_PLANTS_RREH.variables.electricity.values)
+    tot_elec = np.sum(onshore)
+    onshore = typical_week(onshore)
+
+    if scenario in ['hydro_wind', 'ammonia', 'hydrogen', 'methanol']:
+        offshore = np.array(d.solution.elements.OFF_WIND_PLANTS_RREH.variables.electricity.values)
+        hydro = np.sum([np.array(d.solution.elements.HYDRO_PLANT_03h_RREH.variables.electricity.values),
+                        np.array(d.solution.elements.HYDRO_PLANT_03j_RREH.variables.electricity.values),
+                        np.array(d.solution.elements.HYDRO_PLANT_05h_RREH.variables.electricity.values)], axis=0)
+        
+        tot_elec += np.sum(offshore)
+        tot_elec += np.sum(hydro)
+
+        offshore = typical_week(offshore)
+        hydro = typical_week(hydro)
+    else:
+        pv = np.array(d.solution.elements.SOLAR_PV_PLANTS_RREH.variables.electricity.values)
+
+        tot_elec += np.sum(pv)
+        
+        pv = typical_week(pv)
+
     battery_out = typical_week(np.array(d.solution.elements.BATTERY_STORAGE_RREH.variables.electricity_out.values))
 
     # Electricity Consumption & PtG Production (GW)
-    electrolysis = typical_week(np.array(d.solution.elements.ELECTROLYSIS_PLANTS_RREH.variables.electricity.values))
+    electrolysis = np.array(d.solution.elements.ELECTROLYSIS_PLANTS_RREH.variables.electricity.values)
+    electrolyzer_elec = np.sum(electrolysis)
+    electrolysis = typical_week(electrolysis)
+
     desalination = typical_week(np.array(d.solution.elements.DESALINATION_PLANTS_RREH.variables.electricity.values))
     battery_in = typical_week(np.array(d.solution.elements.BATTERY_STORAGE_RREH.variables.electricity_in.values))
     h2o_storage = typical_week(np.array(d.solution.elements.WATER_STORAGE_RREH.variables.electricity.values))
     h2_storage = typical_week(np.array(d.solution.elements.HYDROGEN_STORAGE_RREH.variables.electricity.values))
 
-    if scenario == 'ammonia':
+    h2_liquefaction_elec = 0
+
+    if scenario in ['ammonia', 'ammonia_algeria']:
         conv = typical_week(np.array(d.solution.elements.ASU_RREH.variables.electricity.values))
         n2_storage = typical_week(np.array(d.solution.elements.NITROGEN_STORAGE_RREH.variables.electricity.values))
         prod = typical_week(np.array(d.solution.elements.NH3_PROD_RREH.variables.ammonia.values) * 6.25)
         ammonia = typical_week(np.array(d.solution.elements.NH3_PROD_RREH.variables.electricity.values))
-    elif scenario == 'hydrogen':
+    elif scenario in ['hydrogen', 'hydrogen_algeria']:
         prod = typical_week(np.array(d.solution.elements.ELECTROLYSIS_PLANTS_RREH.variables.hydrogen.values) * 39.4)
-        h2_liquefaction = typical_week(np.array(d.solution.elements.HYDROGEN_LIQUEFACTION_PLANTS_RREH.variables.electricity.values))
+        h2_liquefaction = np.array(d.solution.elements.HYDROGEN_LIQUEFACTION_PLANTS_RREH.variables.electricity.values)
+        h2_liquefaction_elec = np.sum(h2_liquefaction)
+        h2_liquefaction = typical_week(h2_liquefaction)
+
         conv = 0
     else:
         conv = typical_week(np.array(d.solution.elements.DIRECT_AIR_CAPTURE_PLANTS_RREH.variables.electricity.values))
         co2_storage = typical_week(np.array(d.solution.elements.CARBON_DIOXIDE_STORAGE_RREH.variables.electricity.values))
-        if scenario == 'methanol':
+        if scenario in ['methanol', 'methanol_algeria']:
             prod = typical_week(np.array(d.solution.elements.METHANOL_PLANTS_RREH.variables.methanol.values) * 6.39)
             methanol = typical_week(np.array(d.solution.elements.METHANOL_PLANTS_RREH.variables.elec.values))
         else:
@@ -802,9 +1001,13 @@ def plot_typical_weeks_prod(d, results_path, scenario, timehorizon, report=False
 
     # Plotting production
     ax1.fill_between(time, 0, onshore, color='#00BA9B', label='Onshore Wind', alpha=0.8)
-    ax1.fill_between(time, onshore, onshore + offshore, color='#B4E35D', label='Offshore Wind', alpha=0.8)
-    ax1.fill_between(time, onshore + offshore, onshore + offshore + hydro, color='#61DEE3', label='Hydro', alpha=0.8)
-    ax1.fill_between(time, onshore + offshore + hydro, onshore + offshore + hydro + battery_out, color='#FEDC00', label='Battery Discharge', alpha=0.8)
+    if scenario in ['hydro_wind', 'ammonia', 'hydrogen', 'methanol']:
+        ax1.fill_between(time, onshore, onshore + offshore, color='#B4E35D', label='Offshore Wind', alpha=0.8)
+        ax1.fill_between(time, onshore + offshore, onshore + offshore + hydro, color='#61DEE3', label='Hydro', alpha=0.8)
+        ax1.fill_between(time, onshore + offshore + hydro, onshore + offshore + hydro + battery_out, color='#FEDC00', label='Battery Discharge', alpha=0.8)
+    else:
+        ax1.fill_between(time, onshore, onshore + pv, color='#B4E35D', label='PV', alpha=0.8)
+        ax1.fill_between(time, onshore + pv, onshore + pv + battery_out, color='#FEDC00', label='Battery Discharge', alpha=0.8)
 
     ax3 = ax1.twinx()
     ax3.plot(time, prod, 'k-', label='Production (PtG)', linewidth=2)
@@ -819,9 +1022,9 @@ def plot_typical_weeks_prod(d, results_path, scenario, timehorizon, report=False
         ax2.fill_between(time, cumulative_sum, cumulative_sum + desalination, color='#61DEDF', label='Desalination', alpha=0.8)
         cumulative_sum += desalination
     if np.any(conv != 0):
-        if scenario == 'ammonia':
+        if scenario in ['ammonia', 'ammonia_algeria']:
             label = 'ASU'
-        elif scenario == 'methanol':
+        elif scenario in ['methanol', 'methanol_algeria']:
             label = 'e-Methanol'
         else:
             label = 'Methanation'
@@ -838,23 +1041,23 @@ def plot_typical_weeks_prod(d, results_path, scenario, timehorizon, report=False
         cumulative_sum += h2_storage
 
     # Scenario-specific additions
-    if scenario == 'ammonia' and np.any(n2_storage != 0):
+    if scenario in ['ammonia', 'ammonia_algeria'] and np.any(n2_storage != 0):
         ax2.fill_between(time, cumulative_sum, cumulative_sum + n2_storage, color='#9260D0', label='N2 Storage', alpha=0.8)
         cumulative_sum += n2_storage
         if np.any(ammonia != 0):
             ax2.fill_between(time, cumulative_sum, cumulative_sum + ammonia, color='violet', label='Ammonia Production', alpha=0.8)
             cumulative_sum += ammonia
-    elif scenario == 'hydrogen' and np.any(h2_liquefaction != 0):
+    elif scenario in ['hydrogen', 'hydrogen_algeria'] and np.any(h2_liquefaction != 0):
         ax2.fill_between(time, cumulative_sum, cumulative_sum + h2_liquefaction, color='#00394E', label='H2 Liquefaction', alpha=0.8)
         cumulative_sum += h2_liquefaction
     else:
         if np.any(co2_storage != 0):
             ax2.fill_between(time, cumulative_sum, cumulative_sum + co2_storage, color='#FF4B00', label='CO2 Storage', alpha=0.8)
             cumulative_sum += co2_storage
-        if scenario == 'methanol' and np.any(methanol != 0):
+        if scenario in ['methanol', 'methanol_algeria'] and np.any(methanol != 0):
             ax2.fill_between(time, cumulative_sum, cumulative_sum + methanol, color='violet', label='Methanol Production', alpha=0.8)
             cumulative_sum += methanol
-        elif scenario != 'methanol' and np.any(ch4_liquefaction != 0):
+        elif scenario != ['methanol', 'methanol_algeria'] and np.any(ch4_liquefaction != 0):
             ax2.fill_between(time, cumulative_sum, cumulative_sum + ch4_liquefaction, color='#D1D7CE', label='CH4 Liquefaction', alpha=0.8)
             cumulative_sum += ch4_liquefaction
 
@@ -863,13 +1066,18 @@ def plot_typical_weeks_prod(d, results_path, scenario, timehorizon, report=False
     ax4.set_ylim(bottom=0)
 
     # Set labels, titles, and grid
-    ax1.set_xlabel('Time (days)')
-    ax1.set_ylabel('Power in GWh')
-    ax2.set_xlabel('Time (days)')
-    ax2.set_ylabel('Power in GWh')
-    # Labels for ax3 and ax4
-    ax3.set_ylabel('Production Output in GWh (HHV)')
-    ax4.set_ylabel('Production Output in GWh (HHV)')
+    ax1.set_xlabel('Time (days)', fontsize=14)
+    ax1.set_ylabel('Power in GWh', fontsize=14)
+    ax2.set_xlabel('Time (days)', fontsize=14)
+    ax2.set_ylabel('Power in GWh', fontsize=14)
+    ax3.set_ylabel('Production Output in GWh (HHV)', fontsize=14)
+    ax4.set_ylabel('Production Output in GWh (HHV)', fontsize=14)
+
+    # Adjust tick label sizes
+    ax1.tick_params(axis='both', which='major', labelsize=12)
+    ax2.tick_params(axis='both', which='major', labelsize=12)
+    ax3.tick_params(axis='both', which='major', labelsize=12)
+    ax4.tick_params(axis='both', which='major', labelsize=12)
     ax2.set_ylim(ax1.get_ylim())
 
     # Ensure that the right y-axes match the left y-axes and start at 0
@@ -895,9 +1103,8 @@ def plot_typical_weeks_prod(d, results_path, scenario, timehorizon, report=False
 
     fig.subplots_adjust(wspace=0.3)  # Increase the spacing between subplots
 
-
-    ax1.legend(handles1 + handles3, labels1 + labels3, loc='lower right', fontsize='medium')
-    ax2.legend(handles2 + handles4, labels2 + labels4, loc='lower right', fontsize='medium')
+    ax1.legend(handles1 + handles3, labels1 + labels3, loc='lower right', fontsize=12)
+    ax2.legend(handles2 + handles4, labels2 + labels4, loc='lower right', fontsize=12)
 
     # Save the plot with naming convention
     img_folder_name = f"img_{timehorizon}/constant" if timehorizon else "img_all"
@@ -918,6 +1125,8 @@ def plot_typical_weeks_prod(d, results_path, scenario, timehorizon, report=False
     
     fig.savefig(plot_path, bbox_inches='tight')
     plt.close(fig)
+
+    return tot_elec, electrolyzer_elec, h2_liquefaction_elec
 
 def conversion_factor(d, scenario):
     production_types_mapping = {
@@ -1017,6 +1226,10 @@ def analyze_json_files(args):
             "BATTERY_STORAGE_RREH_flow": [],
             "BATTERY_STORAGE_RREH_stock": [],
             "ELECTROLYSIS_PLANTS_RREH": [],
+            "hydrogen production (kt)": [],
+            "electricity production (GWh)": [],
+            "electrolyzer consumption (GWh)": [],
+            "H2 liquefaction consumption (GWh)": [],
             "price per mwh": [],
             "total cost": [],
             "total cost_rreh": [],
@@ -1122,6 +1335,10 @@ def analyze_json_files(args):
                             else:
                                 hydropower_avg = 'NA'
 
+                            hydrogen_prod = plot_hydrogen_dynamics(data, results_path, scenario, args.timehorizon, wacc_label)
+
+                            aggregated_data['hydrogen production (kt)'].append(hydrogen_prod)
+
                             if scenario not in ['germany_pipe', 'spain_pipe'] and wacc_label == 'constant':
                                 new_row = pd.DataFrame({
                                     'Country': ['greenland' if scenario == 'hydro_wind' else scenario],
@@ -1139,8 +1356,11 @@ def analyze_json_files(args):
                                 })
                                 conversion_factors_df = pd.concat([conversion_factors_df, new_row], ignore_index=True)
                             
-                            if scenario in ['hydro_wind', 'ammonia', 'methanol', 'hydrogen']:
-                                plot_typical_weeks_prod(data, results_path, scenario, args.timehorizon, args.report)
+                            if scenario in ['hydro_wind', 'ammonia', 'methanol', 'hydrogen', 'algeria', 'ammonia_algeria', 'methanol_algeria', 'hydrogen_algeria']:
+                                tot_elec, electrolyzer_elec, h2_liquefaction_elec = plot_typical_weeks_prod(data, results_path, scenario, args.timehorizon, args.report)
+                                aggregated_data['electricity production (GWh)'].append(tot_elec)
+                                aggregated_data['electrolyzer consumption (GWh)'].append(electrolyzer_elec)
+                                aggregated_data['H2 liquefaction consumption (GWh)'].append(h2_liquefaction_elec)
                             
         all_data.append(aggregated_data)
 
@@ -1257,20 +1477,20 @@ def plot_price_intervals(df, time_horizon, report=False):
     x = np.arange(len(scenarios))
     bar_width = 0.35
     opacity = 0.7
-    bars1 = ax.bar(x - bar_width/2, constant_values, bar_width, alpha=opacity, color='tab:blue')
+    bars1 = ax.bar(x - bar_width / 2, constant_values, bar_width, alpha=opacity, color='tab:blue')
     colors = ['tab:green' if constant - diff > 0 else 'tab:red' for constant, diff in zip(constant_values, diff_values)]
-    bars2 = ax.bar(x + bar_width/2, diff_values, bar_width, alpha=opacity, color=colors)
+    bars2 = ax.bar(x + bar_width / 2, diff_values, bar_width, alpha=opacity, color=colors)
 
-    ax.set_xlabel('Country')
-    ax.set_ylabel('Price per MWh (€)')
+    ax.set_ylabel('Price per MWh (€)', fontsize=14)
+    ax.tick_params(axis='both', which='major', labelsize=12)
     if not report:
-        ax.set_title('Price per MWh Intervals per Country')
+        ax.set_title('Price per MWh Intervals per Country', fontsize=16)
     ax.set_xticks(x)
-    ax.set_xticklabels([scenario.capitalize() for scenario in scenarios])
-    red_patch = mpatches.Patch(color='tab:red', label='Differentiated (Worse)', alpha=0.7)
+    ax.set_xticklabels([scenario.capitalize() for scenario in scenarios], fontsize=12)
+    red_patch = mpatches.Patch(color='tab:red', label='Differentiated (> 7%)', alpha=0.7)
     blue_patch = mpatches.Patch(color='tab:blue', label='Constant (7%)', alpha=0.7)
-    green_patch = mpatches.Patch(color='tab:green', label='Differentiated (Better)', alpha=0.7)
-    ax.legend(title='WACC is', handles=[blue_patch, green_patch, red_patch], loc='upper left')
+    green_patch = mpatches.Patch(color='tab:green', label='Differentiated (< 7%)', alpha=0.7)
+    ax.legend(title='WACC is', handles=[blue_patch, green_patch, red_patch], loc='upper left', fontsize=12)
 
     for i, (constant_value, diff_value, scenario) in enumerate(zip(constant_values, diff_values, scenarios)):
         percent_change = ((diff_value - constant_value) / constant_value) * 100
@@ -1280,9 +1500,9 @@ def plot_price_intervals(df, time_horizon, report=False):
         annotation_y = max_val + 5
         color = 'black'
 
-        ax.text(i, annotation_y, annotation_text, ha='center', bbox=dict(facecolor='white', alpha=0.8))
-        ax.text(i - bar_width/2, constant_value / 2, f"{round(constant_value, 2)}", ha='center', va='center', color='white')
-        ax.text(i + bar_width/2, diff_value / 2, f"{round(diff_value, 2)}", ha='center', va='center', color='white')
+        ax.text(i, annotation_y, annotation_text, ha='center', fontsize=12, bbox=dict(facecolor='white', alpha=0.8))
+        ax.text(i - bar_width / 2, constant_value / 2, f"{round(constant_value, 2)}", ha='center', va='center', color='white', fontsize=12)
+        ax.text(i + bar_width / 2, diff_value / 2, f"{round(diff_value, 2)}", ha='center', va='center', color='white', fontsize=12)
 
     img_folder_path = f'scripts/results/img/{time_horizon}'
     if not os.path.exists(img_folder_path):
@@ -1365,13 +1585,12 @@ def plot_technology_capacities_and_prices(df, time_horizon, report=False):
                          color=color_price, label='Price per MWh', alpha=0.7)
 
     # Labeling and aesthetics
-    ax1.set_xlabel('Technology')
-    ax1.set_ylabel('Installed Capacity (GW)', color='black')
-    ax1.tick_params(axis='y', labelcolor='black')
-    ax2.set_ylabel('Price per MWh (€)', color='black')
-    ax2.tick_params(axis='y', labelcolor='black')
+    ax1.set_ylabel('Installed Capacity (GW)', color='black', fontsize=14)
+    ax1.tick_params(axis='y', labelcolor='black', labelsize=12)
+    ax2.set_ylabel('Price per MWh (€)', color='black', fontsize=14)
+    ax2.tick_params(axis='y', labelcolor='black', labelsize=12)
     ax1.set_xticks(index)
-    ax1.set_xticklabels(plot_data['Scenario'])
+    ax1.set_xticklabels([scenario.capitalize() for scenario in plot_data['Scenario']], fontsize=12)
 
     # Annotate the bars with their values
     for bar in capacity_bars:
@@ -1380,7 +1599,7 @@ def plot_technology_capacities_and_prices(df, time_horizon, report=False):
                      xy=(bar.get_x() + bar_width / 2, height),
                      xytext=(0, 3),  # 3 points vertical offset
                      textcoords="offset points",
-                     ha='center', va='bottom')
+                     ha='center', va='bottom', fontsize=12)
 
     for bar in price_bars:
         height = bar.get_height()
@@ -1388,11 +1607,15 @@ def plot_technology_capacities_and_prices(df, time_horizon, report=False):
                      xy=(bar.get_x() + bar_width / 2, height),
                      xytext=(0, 3),  # 3 points vertical offset
                      textcoords="offset points",
-                     ha='center', va='bottom')
+                     ha='center', va='bottom', fontsize=12)
 
-    fig.legend(loc="upper right", bbox_to_anchor=(1, 1), bbox_transform=ax1.transAxes)
+    # Combine the legends for ax1 and ax2
+    handles, labels = ax1.get_legend_handles_labels()
+    handles2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(handles + handles2, labels + labels2, loc="upper right", fontsize=12)
+
     if not report:
-        plt.title('Installed Capacity and Price per MWh by Isolated Technology')
+        plt.title('Installed Capacity and Price per MWh by Isolated Technology', fontsize=16)
     fig.tight_layout()
 
     img_folder_path = f'scripts/results/img/{time_horizon}'
@@ -1474,8 +1697,7 @@ def plot_installed_capacity_specific_technologies(df, time_horizon, report=False
         ax.bar(scenarios_list, capacities, color=scenario_colors, alpha=0.7)
         ax.set_title(tech)
         ax.set_ylabel('Installed Capacity')
-        ax.set_xlabel('Scenario')
-        ax.set_xticklabels(scenarios_list, rotation=45)
+        ax.set_xticklabels(scenarios_list, rotation=0)
         ax.set_ylim(0, y_max)  # Set the same y-axis limit for all subplots
 
         for i, capacity in enumerate(capacities):
@@ -1565,25 +1787,31 @@ def plot_cost_comparison_specific_scenarios(df, time_horizon, report=False):
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # Plot the stacked bars with the specified colors
-    rreh_bars = ax.bar(index, cost_data['price_gr'], bar_width, label='Cost GR (€MWh)', color='tab:blue', alpha=0.7)
-    be_bars = ax.bar(index, cost_data['price_be'], bar_width, bottom=cost_data['price_gr'], label='Cost BE (€MWh)', color='tab:red', alpha=0.7)
+    rreh_bars = ax.bar(index, cost_data['price_gr'], bar_width, label='Cost GR (€/MWh)', color='tab:blue', alpha=0.7)
+    be_bars = ax.bar(index, cost_data['price_be'], bar_width, bottom=cost_data['price_gr'], label='Cost BE (€/MWh)', color='tab:red', alpha=0.7)
 
     # Labeling and aesthetics
-    ax.set_xlabel('Scenario')
-    ax.set_ylabel('Cost (€MWh)', color='black')
-    ax.tick_params(axis='y', labelcolor='black')
+    ax.set_ylabel('Cost (€MWh)', color='black', fontsize=14)
+    ax.tick_params(axis='y', labelcolor='black', labelsize=12)
     ax.set_xticks(index)
-    ax.set_xticklabels(cost_data['Scenario'])
+    ax.set_xticklabels(cost_data['Scenario'], fontsize=12)
 
     # Annotate the bars with their values
-    for bar, cost in zip(rreh_bars, cost_data['price_mwh']):
-        height = bar.get_height()
-        ax.annotate(f'{cost:.2f}', xy=(bar.get_x() + bar.get_width() / 2, height), xytext=(0, 6), textcoords="offset points", ha='center', va='bottom')
+    for rreh_bar, be_bar, cost in zip(rreh_bars, be_bars, cost_data['price_mwh']):
+        rreh_height = rreh_bar.get_height()
+        be_height = be_bar.get_height()
+        height = rreh_height + be_height
+        ax.annotate(f'{cost:.2f}', xy=(rreh_bar.get_x() + rreh_bar.get_width() / 2, height), xytext=(0, 3), textcoords="offset points", ha='center', va='bottom', fontsize=12)
 
-    fig.legend(loc="upper right", bbox_to_anchor=(1, 1), bbox_transform=ax.transAxes)
-    if not report:
-        plt.title('Total Costs per MWh for Specific Scenarios')
+    # Create a single legend combining all the labels
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles, labels, loc="upper right", fontsize=12)
+
+    # Adjust the layout to include space for the legend
     fig.tight_layout()
+
+    if not report:
+        plt.title('Total Costs per MWh for Specific Scenarios', fontsize=16)
     img_folder_path = f'scripts/results/img/{time_horizon}'
     
     # Ensure the directory exists
@@ -1645,29 +1873,27 @@ def plot_stacked_bar_costs(df, time_horizon, report=False):
                      bottom=cost_data['price_gr'], label='Cost BE (€MWh)', color='tab:red', alpha=0.7)
 
     # Add horizontal line
-    ax.axhline(y=153.59, color='darkred', linestyle='--', label='Reference Case')
+    ax.axhline(y=153.59, color='darkred', linestyle='--', label='Reference Case (Algeria)')
 
+    
     # Labeling and aesthetics
-    ax.set_xlabel('Scenario')
-    ax.set_ylabel('Cost (€MWh)', color='black')
-    ax.tick_params(axis='y', labelcolor='black')
+    ax.set_ylabel('Cost (€MWh)', color='black', fontsize=14)
+    ax.tick_params(axis='y', labelcolor='black', labelsize=12)
     ax.set_xticks(index)
-    ax.set_xticklabels(cost_data['Scenario'])
+    ax.set_xticklabels(cost_data['Scenario'], fontsize=12)
 
     # Annotate the bars with their values
     for bar, cost in zip(rreh_bars, cost_data['price_mwh']):
         height = bar.get_height()
-        ax.annotate(f'{cost:.2f}',
-                    xy=(bar.get_x() + bar.get_width() / 2, height),
-                    xytext=(0, 3),  # 3 points vertical offset
-                    textcoords="offset points",
-                    ha='center', va='bottom')
+        ax.annotate(f'{cost:.2f}', xy=(bar.get_x() + bar.get_width() / 2, height), xytext=(0, 3), textcoords="offset points", ha='center', va='bottom', fontsize=12)
 
-    fig.legend(loc="upper right", bbox_to_anchor=(1, 1), bbox_transform=ax.transAxes)
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles, labels, loc="upper right", fontsize=12)
     if not report:
-        plt.title('Total Costs per MWh by Scenario')
-    fig.tight_layout()
+        plt.title('Total Costs per MWh by Scenario', fontsize=16)
     img_folder_path = f'scripts/results/img/{time_horizon}'
+    fig.tight_layout()
+    # Ensure the directory exists
     if not os.path.exists(img_folder_path):
         os.makedirs(img_folder_path)
     if report:
