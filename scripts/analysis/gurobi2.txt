@@ -1,3 +1,0 @@
-Method 2
-BarHomogeneous 1
-Crossover -1

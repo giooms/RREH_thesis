@@ -1,6 +1,0 @@
-Method 2
-BarHomogeneous 1
-Crossover 0
-ScaleFlag=1           # Enable scaling for numerical stability
-TimeLimit=3600        # Limit the solver to one hour
-IterationLimit=1000000 # Limit the solver to one million iterations

@@ -72,9 +72,9 @@ def run_scenario(scenario, timehorizon, wacc_case):
     gboml_model.add_hyperedges_in_model(*edges)
     gboml_model.build_model()
     if scenario == "hydro": # Crossover disabled to avoid 'Out of Memory' error
-        solution, obj, status, solver_info, constr_info, _ = gboml_model.solve_gurobi(opt_file="scripts/analysis/gurobi1.txt")
+        solution, obj, status, solver_info, constr_info, _ = gboml_model.solve_gurobi(opt_file="scripts/gurobi1.txt")
     else: 
-        solution, obj, status, solver_info, constr_info, _ = gboml_model.solve_gurobi(opt_file="scripts/analysis/gurobi2.txt")
+        solution, obj, status, solver_info, constr_info, _ = gboml_model.solve_gurobi(opt_file="scripts/gurobi2.txt")
 
 
     gathered_data = gboml_model.turn_solution_to_dictionary(solver_info, status, solution, obj, constr_info)
