@@ -551,7 +551,7 @@ def plot_production_dynamics(d, plant_capacities, results_path, scenario, timeho
             ax.axhline(y=0, color='k', linestyle='--')
             ax.set_ylim(-0.1, 0.1)
         else:
-            ax.fill_between(data_series.index, data_series['production'], color=color, label=f'{production_type} Electricity Production')
+            ax.fill_between(data_series.index, data_series['production'], color=color, label='Electricity Production')
         
         # Calculate capacity factor
         capacity = plant_capacities.get(production_type, 0)
@@ -559,7 +559,7 @@ def plot_production_dynamics(d, plant_capacities, results_path, scenario, timeho
         normalized_production = total_production / (capacity * timehorizon)
         capacity_factor_line = capacity * normalized_production
 
-        ax.axhline(y=capacity_factor_line, color='red', linestyle='--', label='Capacity Factor')
+        ax.axhline(y=capacity_factor_line, color='red', linestyle='--', label='Average Production')
         
         ax.set_ylabel('GWh', fontsize=14)  # Increase font size of y-axis label
         ax.tick_params(axis='both', which='major', labelsize=12)  # Increase font size of tick labels
