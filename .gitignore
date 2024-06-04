@@ -8,6 +8,8 @@
 *.tex
 *.drawio
 **/flowchart/
+**/results/
 map.py
 map.png
 map.html
+remove_dirs.bat
